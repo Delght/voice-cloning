@@ -1,0 +1,93 @@
+# ============================================================
+# PYTHON
+# ============================================================
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env/
+miniforge-env/
+
+# Environment variables
+.env
+.env.*
+!.env.example
+
+# Pytest
+.pytest_cache/
+.coverage
+htmlcov/
+
+
+# ============================================================
+# MACHINE LEARNING & MODEL WEIGHTS
+# ============================================================
+# Model weight files (can be hundreds of MB to several GB)
+models/
+*.pth
+*.pt
+*.bin
+*.gguf
+*.ggml
+*.safetensors
+*.ckpt
+*.pkl
+*.pickle
+
+
+# ============================================================
+# AUDIO & DATA FILES
+# ============================================================
+data/
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.m4a
+*.aac
+*.opus
+
+
+# ============================================================
+# MACOS
+# ============================================================
+.DS_Store
+.AppleDouble
+.LSOverride
+._*
+.Spotlight-V100
+.Trashes
+
+
+# ============================================================
+# EDITORS & IDEs
+# ============================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+
+# ============================================================
+# LOGS & TEMP FILES
+# ============================================================
+*.log
+logs/
+tmp/
+temp/
+.cache/
+
+*.md
+!README.md
