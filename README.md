@@ -4,10 +4,10 @@ A fully self-hosted, privacy-first voice cloning and conversational AI system. N
 
 ## What it does
 
-- **Clone any voice** from a short audio reference (zero-shot)
+- **Zero-shot voice cloning (best-effort)** from a short reference clip (quality varies by language and recording)
 - **Speak Vietnamese naturally** via a dedicated Vietnamese TTS model
-- **Converse with an AI** — your voice in, AI's response out, in your cloned voice
-- **Convert voice timbre** using RVC to match a target speaker
+- **Converse with an AI** — your voice in, AI's response out (voice similarity depends on the selected TTS/VC setup)
+- **High-similarity voice cloning via Voice Conversion (RVC)** using a trained `.pth` model (trained separately)
 
 ## Tech Stack
 
@@ -25,6 +25,10 @@ A fully self-hosted, privacy-first voice cloning and conversational AI system. N
 ```
 Mic → [STT] → text → [LLM] → response → [TTS] → audio → [RVC] → cloned voice → Speaker
 ```
+
+Notes:
+- The system can run in TTS-only mode (no RVC).
+- RVC requires a trained voice model (`.pth`, optional `.index`). Without it, you can still use TTS, but it won't match a specific target speaker reliably.
 
 ## Requirements
 
