@@ -1,0 +1,40 @@
+# ============================================================
+# PHASE 1 — Audio Processing & STT
+# ============================================================
+faster-whisper
+librosa
+pydub
+soundfile
+
+# ============================================================
+# PHASE 2 — TTS & Voice Cloning
+# (fish-speech & VieNeu-TTS installed separately from their repos)
+# ============================================================
+
+# ============================================================
+# PHASE 3+ — API Backend
+# ============================================================
+fastapi
+uvicorn[standard]
+pydantic
+python-multipart    # required for FastAPI file uploads
+
+# ============================================================
+# ML CORE
+# (torch & torchaudio installed via Miniforge for MPS support)
+# ============================================================
+torchaudio
+numpy
+pandas              # for transcript.csv handling
+
+# ============================================================
+# UTILITIES
+# ============================================================
+python-dotenv
+gradio
+
+# ============================================================
+# TESTING (Phase 6)
+# ============================================================
+pytest
+httpx               # required by FastAPI TestClient
