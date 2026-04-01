@@ -1,6 +1,8 @@
 # Voice Cloning & AI Assistant
 
-A fully self-hosted, privacy-first voice cloning and conversational AI system built on Apple Silicon. No cloud APIs — everything runs locally on your machine.
+A fully self-hosted, privacy-first voice cloning and conversational AI system. No cloud APIs — all inference runs on your own hardware or your own server.
+
+**Cloud-ready & hardware-agnostic** — develop locally on Apple Silicon, deploy anywhere (cloud VPS, home server, or any GPU machine) via Docker without changing a single line of code.
 
 ## What it does
 
@@ -20,7 +22,7 @@ A fully self-hosted, privacy-first voice cloning and conversational AI system bu
 | LLM Brain | Qwen3.5 via Anything-LLM |
 | Backend | FastAPI + Pydantic |
 | Frontend | Gradio |
-| Hardware | Apple M4 Pro · 24GB · MPS backend |
+| Hardware | Apple MPS · Nvidia CUDA · CPU (auto-detected) |
 
 ## Architecture
 
@@ -52,9 +54,15 @@ User → Microphone
 
 ## Requirements
 
-- Apple Silicon Mac (M1/M2/M3/M4)
-- [Miniforge](https://github.com/conda-forge/miniforge) (native ARM64 Python)
+**Local Development (macOS Apple Silicon):**
+
+- Apple Silicon Mac (M1/M2/M3/M4) with [Miniforge](https://github.com/conda-forge/miniforge)
 - `brew install ffmpeg`
+
+**Cloud / Server Deployment:**
+
+- Docker + Docker Compose
+- Nvidia GPU recommended (CUDA auto-detected), CPU fallback supported
 
 ## Getting Started
 
