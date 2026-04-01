@@ -30,6 +30,7 @@ Mic → [STT] → text → [LLM] → response → [TTS] → audio → [RVC] → 
 
 - Python 3.11+ with [Miniforge](https://github.com/conda-forge/miniforge) (recommended)
 - `ffmpeg` (`brew install ffmpeg` on macOS)
+- [Ollama](https://ollama.com) + [Anything-LLM](https://anythingllm.com) for the LLM brain
 - Apple Silicon (MPS), Nvidia GPU (CUDA), or CPU — auto-detected
 
 ## Quick Start
@@ -65,14 +66,18 @@ Start each service in its own terminal:
 ```bash
 make run_stt          # :8001
 make run_tts          # :8002 (Vietnamese TTS, default)
-make run_tts_fish     # :8002 (fish-speech, multilingual)
-make run_tts_all      # :8002 (both engines, more RAM)
-make run_rvc          # :8003
-make run_gateway      # :8000 (proxies all services)
+make run_llm          # :8004 (LLM connector → Anything-LLM)
+make run_gateway      # :8000 (proxy + orchestrator)
 ```
 
 ```bash
 curl http://localhost:8000/health
+
+# Full conversation pipeline (audio → STT → LLM → TTS → audio)
+curl -X POST http://localhost:8000/chat \
+    -F "audio=@data/chunks/speech_chunk_0001.wav" -o response.wav
+
+# Individual services
 curl -X POST http://localhost:8000/transcribe \
     -F "audio=@data/chunks/speech_chunk_0001.wav"
 curl -X POST http://localhost:8000/tts/vieneu \

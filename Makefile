@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help fmt lint fix check run_gateway run_stt run_tts run_tts_fish run_tts_all run_rvc health transcribe_sample tts_vieneu_sample
+.PHONY: help fmt lint fix check run_gateway run_stt run_tts run_tts_fish run_tts_all run_rvc run_llm health transcribe_sample tts_vieneu_sample chat_sample
 
 # ------------------------------------------------------------
 # Config
@@ -21,6 +21,9 @@ TTS_PORT ?= 8002
 
 RVC_HOST ?= 127.0.0.1
 RVC_PORT ?= 8003
+
+LLM_HOST ?= 127.0.0.1
+LLM_PORT ?= 8004
 
 SAMPLE_AUDIO ?= data/chunks/speech_chunk_0001.wav
 
@@ -44,11 +47,13 @@ help:
 	@echo "  make run_tts_fish     - TTS with fish-speech only (heavier)"
 	@echo "  make run_tts_all      - TTS with both engines (uses more RAM)"
 	@echo "  make run_rvc"
+	@echo "  make run_llm          - LLM connector → Anything-LLM :3001"
 	@echo ""
 	@echo "Quick smoke tests (requires gateway + relevant service running):"
 	@echo "  make health"
 	@echo "  make transcribe_sample"
 	@echo "  make tts_vieneu_sample"
+	@echo "  make chat_sample      - full STT→LLM→TTS pipeline"
 	@echo ""
 	@echo "Notes:"
 	@echo "  - Override conda env: make CONDA_ENV=voice"
@@ -90,6 +95,9 @@ run_tts_all:
 run_rvc:
 	$(UVICORN) services.rvc.app:app --host $(RVC_HOST) --port $(RVC_PORT)
 
+run_llm:
+	$(UVICORN) services.llm.app:app --host $(LLM_HOST) --port $(LLM_PORT)
+
 # ------------------------------------------------------------
 # Smoke tests (curl)
 # ------------------------------------------------------------
@@ -105,4 +113,10 @@ tts_vieneu_sample:
 		-F "text=Xin chào, hôm nay trời đẹp quá!" \
 		--output data/output_make_vieneu.wav
 	@$(PY) -c "import soundfile as sf; i=sf.info('data/output_make_vieneu.wav'); print(f'WAV saved: data/output_make_vieneu.wav | {i.samplerate}Hz | {i.duration:.2f}s | ch={i.channels}')"
+
+chat_sample:
+	@curl -s -X POST http://$(GATEWAY_HOST):$(GATEWAY_PORT)/chat \
+		-F "audio=@$(SAMPLE_AUDIO)" \
+		--output data/response.wav
+	@$(PY) -c "import soundfile as sf; i=sf.info('data/response.wav'); print(f'Response audio: data/response.wav | {i.samplerate}Hz | {i.duration:.2f}s | ch={i.channels}')"
 

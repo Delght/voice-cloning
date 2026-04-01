@@ -1,12 +1,10 @@
-"""API Gateway — thin reverse proxy for Voice microservices.
-
-Routes requests to the correct downstream service without any business logic.
-Think of it as nginx proxy_pass but in Python, with health check aggregation.
+"""API Gateway — reverse proxy for Voice microservices.
 
 Run:
     uvicorn gateway.app:app --port 8000
 
 Endpoints:
+    POST /chat              -> orchestrate STT → LLM → TTS pipeline
     POST /transcribe        -> STT :8001
     POST /tts/fish-speech   -> TTS :8002
     POST /tts/vieneu        -> TTS :8002
@@ -19,10 +17,11 @@ import logging
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, File, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 
 from .config import REQUEST_TIMEOUT, ROUTE_MAP, SERVICES
+from .orchestrator import PipelineError, run_chat_pipeline
 from .schemas import GatewayHealth, HealthStatus
 
 logging.basicConfig(
@@ -47,7 +46,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Voice — API Gateway",
-    description="Reverse proxy for STT, TTS, and RVC microservices",
+    description="Reverse proxy and orchestrator for STT, TTS, RVC, and LLM microservices",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -96,6 +95,36 @@ async def _proxy(request: Request, upstream_url: str) -> Response:
                 "detail": f"Upstream {upstream_url} did not respond in time.",
             },
         )
+
+
+# --- Orchestrator route ---
+
+
+@app.post("/chat")
+async def chat(
+    audio: UploadFile = File(..., description="User voice audio (wav, mp3, flac, etc.)"),
+):
+    """Voice conversation pipeline: audio → STT → LLM → TTS → audio."""
+    audio_bytes = await audio.read()
+    if not audio_bytes:
+        return JSONResponse(status_code=400, content={"error": "Empty audio file"})
+
+    log.info("/chat: received audio '%s' (%d bytes)", audio.filename, len(audio_bytes))
+
+    try:
+        response_wav = await run_chat_pipeline(audio_bytes, _client)
+    except PipelineError as e:
+        log.error("/chat pipeline error at [%s]: %s", e.stage, e.detail)
+        return JSONResponse(
+            status_code=e.status_code,
+            content={"error": f"Pipeline failed at [{e.stage}]", "detail": e.detail},
+        )
+
+    return Response(
+        content=response_wav,
+        media_type="audio/wav",
+        headers={"Content-Disposition": "attachment; filename=response.wav"},
+    )
 
 
 # --- Proxy routes ---
@@ -155,7 +184,7 @@ async def health_all():
 
 @app.get("/health/{service}")
 async def health_single(service: str):
-    """Check health of a specific service by name (stt, tts, rvc)."""
+    """Check health of a specific service by name (stt, tts, rvc, llm)."""
     if service not in SERVICES:
         return JSONResponse(
             status_code=404,
