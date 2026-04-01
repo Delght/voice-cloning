@@ -1,10 +1,23 @@
 """VieNeu-TTS Engine — Vietnamese TTS model loading and synthesis.
 
-Extracted from scripts/vieneu_infer.py for use as a long-running service.
+Uses **standard** mode which supports proper voice cloning via
+ref_audio + ref_text (phonemized and encoded into the LLM prompt).
+
+Turbo mode only uses a 128-dim speaker embedding and ignores ref_text
+entirely — that's why cloning quality was poor. Standard mode passes
+full speech token codes + phonemized ref_text into the prompt, matching
+the official VieNeu SDK documentation.
+
+Run:
+    uvicorn services.tts.app:app --port 8002
 """
+
+from __future__ import annotations
 
 import io
 import logging
+import tempfile
+from pathlib import Path
 
 import numpy as np
 import soundfile as sf
@@ -15,23 +28,51 @@ SAMPLE_RATE = 24_000
 
 
 class VieNeuEngine:
-    """Wraps VieNeu-TTS for repeated synthesis calls.
+    """Wraps VieNeu-TTS (standard mode) for repeated synthesis calls.
 
-    Supports optional voice cloning from a short (3-5s) reference audio.
+    Standard mode loads:
+      - Backbone: GGUF quantised LLM (via llama-cpp-python, CPU)
+      - Codec:    DistillNeuCodec (PyTorch, CPU)
+
+    Voice cloning flow (standard mode):
+      1. ref_audio → codec.encode_code() → speech token codes
+      2. ref_text  → phonemize() → ref phonemes
+      3. Prompt = ref_phonemes + input_phonemes + speech_token_codes
+      4. LLM generates new speech tokens conditioned on all of the above
+      5. codec.decode_code() → waveform
+
+    This is fundamentally different from turbo mode which only uses a
+    128-dim embedding and ignores ref_text.
     """
 
-    def __init__(self, mode: str = "turbo") -> None:
-        self.mode = mode
+    def __init__(
+        self,
+        *,
+        backbone_device: str = "cpu",
+        codec_device: str = "cpu",
+    ) -> None:
+        self._backbone_device = backbone_device
+        self._codec_device = codec_device
         self._engine = None
 
     def load(self) -> None:
         from vieneu import Vieneu
 
-        log.info("Loading VieNeu-TTS | mode: %s", self.mode)
-        self._engine = Vieneu(mode=self.mode)
-        log.info("VieNeu-TTS engine ready.")
+        log.info(
+            "Loading VieNeu-TTS | mode=standard | backbone=%s | codec=%s",
+            self._backbone_device,
+            self._codec_device,
+        )
+        self._engine = Vieneu(
+            mode="standard",
+            backbone_device=self._backbone_device,
+            codec_device=self._codec_device,
+        )
+        log.info("VieNeu-TTS (standard) engine ready.")
 
     def unload(self) -> None:
+        if self._engine is not None:
+            self._engine.close()
         self._engine = None
         log.info("VieNeu-TTS engine unloaded.")
 
@@ -43,16 +84,21 @@ class VieNeuEngine:
         self,
         text: str,
         ref_audio_bytes: bytes | None = None,
+        ref_audio_filename: str | None = None,
+        ref_text: str | None = None,
         *,
-        temperature: float = 0.4,
+        temperature: float = 1.0,
         top_k: int = 50,
+        max_chars: int = 256,
     ) -> tuple[bytes, int]:
         """Synthesize Vietnamese speech and return (wav_bytes, sample_rate).
 
         Args:
             text: Text to synthesize (Vietnamese, English, or mixed).
-            ref_audio_bytes: Optional raw bytes of reference audio for voice cloning.
-            temperature: Sampling temperature.
+            ref_audio_bytes: Raw bytes of reference audio (3-5s) for cloning.
+            ref_text: Exact transcript of the reference audio.
+                      Critical for cloning quality — must match what is spoken.
+            temperature: Sampling temperature (standard mode default = 1.0).
             top_k: Top-k sampling parameter.
 
         Returns:
@@ -63,26 +109,53 @@ class VieNeuEngine:
 
         log.info("Synthesizing (VieNeu): text='%s'", text[:60])
 
-        voice = None
-        if ref_audio_bytes is not None:
-            import tempfile
-            from pathlib import Path
+        audio: np.ndarray
 
-            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        if ref_audio_bytes is not None:
+            suffix = ".wav"
+            if ref_audio_filename:
+                try:
+                    s = Path(ref_audio_filename).suffix
+                    if s:
+                        suffix = s
+                except Exception:
+                    pass
+
+            with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
                 tmp.write(ref_audio_bytes)
                 tmp_path = tmp.name
+
             try:
-                voice = self._engine.encode_reference(tmp_path)
-                log.info("Voice embedding encoded from reference audio.")
+                kwargs: dict = {
+                    "text": text,
+                    "ref_audio": tmp_path,
+                    "temperature": temperature,
+                    "top_k": top_k,
+                    "max_chars": max_chars,
+                }
+                if ref_text:
+                    kwargs["ref_text"] = ref_text
+                    log.info(
+                        "Cloning with ref_audio + ref_text (%d chars)",
+                        len(ref_text),
+                    )
+                else:
+                    log.warning(
+                        "ref_text not provided — cloning quality "
+                        "will be degraded. Provide the exact transcript "
+                        "of the reference audio for best results."
+                    )
+
+                audio = self._engine.infer(**kwargs)
             finally:
                 Path(tmp_path).unlink(missing_ok=True)
-
-        audio: np.ndarray = self._engine.infer(
-            text=text,
-            voice=voice,
-            temperature=temperature,
-            top_k=top_k,
-        )
+        else:
+            audio = self._engine.infer(
+                text=text,
+                temperature=temperature,
+                top_k=top_k,
+                max_chars=max_chars,
+            )
 
         if audio is None or len(audio) == 0:
             raise RuntimeError("No audio generated — check input text.")

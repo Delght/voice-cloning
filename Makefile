@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help fmt lint fix check run_gateway run_stt run_tts run_tts_fish run_tts_all run_rvc run_llm run_all stop_all health transcribe_sample tts_vieneu_sample chat_sample
+.PHONY: help fmt lint fix check run_gateway run_stt run_tts run_tts_fish run_tts_all run_rvc run_llm run_ui run_all stop_all health transcribe_sample tts_vieneu_sample chat_sample
 
 # ------------------------------------------------------------
 # Config
@@ -24,6 +24,9 @@ RVC_PORT ?= 8003
 
 LLM_HOST ?= 127.0.0.1
 LLM_PORT ?= 8004
+
+UI_HOST ?= 0.0.0.0
+UI_PORT ?= 7860
 
 SAMPLE_AUDIO ?= data/chunks/speech_chunk_0001.wav
 
@@ -50,6 +53,7 @@ help:
 	@echo "  make run_tts_all      - TTS with both engines (uses more RAM)"
 	@echo "  make run_rvc"
 	@echo "  make run_llm          - LLM connector → Anything-LLM :3001"
+	@echo "  make run_ui           - Gradio UI (connects to Gateway)"
 	@echo ""
 	@echo "Quick smoke tests (requires gateway + relevant service running):"
 	@echo "  make health"
@@ -66,13 +70,13 @@ help:
 # Code quality
 # ------------------------------------------------------------
 fmt:
-	$(RUFF) format services/ gateway/ scripts/
+	$(RUFF) format services/ gateway/ scripts/ ui/
 
 lint:
-	$(RUFF) check services/ gateway/ scripts/
+	$(RUFF) check services/ gateway/ scripts/ ui/
 
 fix:
-	$(RUFF) check services/ gateway/ scripts/ --fix
+	$(RUFF) check services/ gateway/ scripts/ ui/ --fix
 
 check: fmt fix
 
@@ -100,6 +104,9 @@ run_rvc:
 run_llm:
 	$(UVICORN) services.llm.app:app --host $(LLM_HOST) --port $(LLM_PORT)
 
+run_ui:
+	$(PY) -m ui.app
+
 run_all:
 	@$(UVICORN) services.stt.app:app --host $(STT_HOST) --port $(STT_PORT) &
 	@$(UVICORN) services.tts.app:app --host $(TTS_HOST) --port $(TTS_PORT) &
@@ -116,7 +123,13 @@ stop_all:
 # Smoke tests (curl)
 # ------------------------------------------------------------
 health:
-	@curl -s http://$(GATEWAY_HOST):$(GATEWAY_PORT)/health | $(PY) -m json.tool
+	@resp=$$(curl -sS http://$(GATEWAY_HOST):$(GATEWAY_PORT)/health || true); \
+	if printf "%s" "$$resp" | $(PY) -c "import sys, json; json.load(sys.stdin); print('ok')" >/dev/null 2>&1; then \
+		printf "%s" "$$resp" | $(PY) -m json.tool; \
+	else \
+		echo "Health endpoint did not return JSON. Raw response:"; \
+		curl -i http://$(GATEWAY_HOST):$(GATEWAY_PORT)/health || true; \
+	fi
 
 transcribe_sample:
 	@curl -s -X POST http://$(GATEWAY_HOST):$(GATEWAY_PORT)/transcribe \

@@ -47,6 +47,7 @@ class STTEngine:
         self,
         audio_bytes: bytes,
         beam_size: int = 5,
+        language: str | None = None,
     ) -> dict:
         """Transcribe raw audio bytes and return structured result.
 
@@ -72,7 +73,12 @@ class STTEngine:
         if sr != SAMPLE_RATE:
             audio_data = librosa.resample(audio_data, orig_sr=sr, target_sr=SAMPLE_RATE)
 
-        segments_raw, info = self._model.transcribe(audio_data, beam_size=beam_size)
+        segments_raw, info = self._model.transcribe(
+            audio_data,
+            beam_size=beam_size,
+            language=language,
+            task="transcribe",
+        )
 
         segments = []
         full_text_parts = []

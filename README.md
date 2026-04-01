@@ -69,9 +69,16 @@ Start each service in its own terminal:
 
 ```bash
 make run_stt          # :8001
-make run_tts          # :8002 (Vietnamese TTS, default)
+make run_tts          # :8002 (VieNeu, Vietnamese TTS, default)
 make run_llm          # :8004 (LLM connector → Anything-LLM)
 make run_gateway      # :8000 (proxy + orchestrator)
+```
+
+fish-speech runs in a separate conda environment due to dependency conflicts:
+
+```bash
+conda activate voice_fish
+make CONDA_ENV=voice_fish run_tts_fish   # :8002 (fish-speech)
 ```
 
 ```bash
@@ -85,8 +92,21 @@ curl -X POST http://localhost:8000/chat \
 curl -X POST http://localhost:8000/transcribe \
     -F "audio=@data/chunks/speech_chunk_0001.wav"
 curl -X POST http://localhost:8000/tts/vieneu \
-    -F "text=Xin chào!" -o output.wav
+    -F "text=Xin chào!" \
+    -F "ref_audio=@data/raw/reference.wav" \
+    -F "ref_text=Exact transcript of the reference audio" \
+    -o output.wav
 ```
+
+> **VieNeu cloning tip:** `ref_text` must exactly match what is spoken in the reference audio. Without it, cloning quality drops significantly. VieNeu uses **standard mode** (not turbo) for proper text-speech alignment.
+
+### Web UI (Gradio)
+
+```bash
+make run_ui    # http://localhost:7860
+```
+
+4 tabs: Voice Chat, Text-to-Speech, Voice Conversion, Transcribe.
 
 ### Development
 

@@ -79,6 +79,15 @@ async def runtime_error_handler(request, exc):
     )
 
 
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request, exc):
+    log.exception("Unhandled TTS error")
+    return JSONResponse(
+        status_code=500,
+        content={"error": type(exc).__name__, "detail": str(exc)},
+    )
+
+
 @app.get("/health")
 async def health():
     return {
@@ -137,8 +146,16 @@ async def tts_vieneu(
     ref_audio: UploadFile | None = File(
         None, description="Optional reference audio for voice cloning (3-5s)"
     ),
-    temperature: float = Form(0.4),
+    ref_text: str = Form(
+        "",
+        description=(
+            "Optional transcript of reference audio "
+            "(improves cloning if supported by the VieNeu SDK)"
+        ),
+    ),
+    temperature: float = Form(1.0),
     top_k: int = Form(50),
+    max_chars: int = Form(256, description="Max characters per chunk (reduces truncation)"),
 ):
     """Synthesize Vietnamese speech using VieNeu-TTS with optional voice cloning."""
     if vieneu_engine is None or not vieneu_engine.ready:
@@ -148,7 +165,9 @@ async def tts_vieneu(
         )
 
     ref_bytes = None
+    ref_filename = None
     if ref_audio is not None:
+        ref_filename = ref_audio.filename
         ref_bytes = await ref_audio.read()
         if not ref_bytes:
             ref_bytes = None
@@ -156,8 +175,11 @@ async def tts_vieneu(
     wav_bytes, sr = vieneu_engine.synthesize(
         text=text,
         ref_audio_bytes=ref_bytes,
+        ref_audio_filename=ref_filename,
+        ref_text=ref_text.strip() or None,
         temperature=temperature,
         top_k=top_k,
+        max_chars=max_chars,
     )
 
     return Response(

@@ -61,6 +61,10 @@ async def transcribe(
     audio: UploadFile = File(..., description="Audio file (wav, mp3, flac, etc.)"),
     model: str = Form("large-v3", description="Whisper model size"),
     beam_size: int = Form(5, description="Beam search width"),
+    language: str | None = Form(
+        None,
+        description=("Optional language hint (e.g. 'vi', 'en'). If omitted, Whisper auto-detects."),
+    ),
 ):
     """Transcribe an audio file to text.
 
@@ -79,7 +83,7 @@ async def transcribe(
         return JSONResponse(status_code=400, content={"error": "Empty audio file"})
 
     log.info("Transcribing %s (%d bytes)", audio.filename, len(audio_bytes))
-    result = engine.transcribe(audio_bytes, beam_size=beam_size)
+    result = engine.transcribe(audio_bytes, beam_size=beam_size, language=language)
     log.info("Result: lang=%s, text='%s'", result["language"], result["text"][:80])
 
     return result
