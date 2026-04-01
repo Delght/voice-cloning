@@ -82,16 +82,31 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Vietnamese TTS with optional voice cloning via VieNeu-TTS."
     )
-    parser.add_argument("--text",   required=True, help="Text to synthesize (Vietnamese, English, or mixed)")
-    parser.add_argument("--ref",    default=None,  help="Reference audio for voice cloning (3–5s, clear voice)")
+    parser.add_argument(
+        "--text",
+        required=True,
+        help="Text to synthesize (Vietnamese, English, or mixed)",
+    )
+    parser.add_argument(
+        "--ref",
+        default=None,
+        help="Reference audio for voice cloning (3–5s, clear voice)",
+    )
     parser.add_argument("--output", default="data/output_vi.wav", help="Output WAV file")
-    parser.add_argument("--mode",   default="turbo", choices=["turbo", "standard"], help="Engine mode (turbo=CPU/GGUF, standard=PyTorch)")
+    parser.add_argument(
+        "--mode",
+        default="turbo",
+        choices=["turbo", "standard"],
+        help="Engine mode (turbo=CPU/GGUF, standard=PyTorch)",
+    )
 
-    parser.add_argument("--temperature", type=float, default=0.4,  help="Sampling temperature (0.1–1.0)")
-    parser.add_argument("--top-k",       type=int,   default=50,   help="Top-k sampling")
+    parser.add_argument(
+        "--temperature", type=float, default=0.4, help="Sampling temperature (0.1–1.0)"
+    )
+    parser.add_argument("--top-k", type=int, default=50, help="Top-k sampling")
     args = parser.parse_args()
 
-    ref_path    = Path(args.ref) if args.ref else None
+    ref_path = Path(args.ref) if args.ref else None
     output_path = Path(args.output)
 
     if ref_path is not None and not ref_path.exists():

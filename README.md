@@ -1,16 +1,13 @@
 # Voice Cloning & AI Assistant
 
-A fully self-hosted, privacy-first voice cloning and conversational AI system. No cloud APIs — all inference runs on your own hardware or your own server.
-
-**Cloud-ready & hardware-agnostic** — develop locally on Apple Silicon, deploy anywhere (cloud VPS, home server, or any GPU machine) via Docker without changing a single line of code.
+A fully self-hosted, privacy-first voice cloning and conversational AI system. No cloud APIs — all inference runs on your own hardware.
 
 ## What it does
 
 - **Clone any voice** from a short audio reference (zero-shot)
 - **Speak Vietnamese naturally** via a dedicated Vietnamese TTS model
 - **Converse with an AI** — your voice in, AI's response out, in your cloned voice
-- **Convert voice timbre** using RVC to match a target speaker model
-- **Flexible Inputs:** Supports both uploading existing audio files and real-time microphone recording
+- **Convert voice timbre** using RVC to match a target speaker
 
 ## Tech Stack
 
@@ -19,69 +16,73 @@ A fully self-hosted, privacy-first voice cloning and conversational AI system. N
 | Speech-to-Text | [SYSTRAN/faster-whisper](https://github.com/SYSTRAN/faster-whisper) |
 | Text-to-Speech | [fishaudio/fish-speech](https://github.com/fishaudio/fish-speech) + [pnnbao97/VieNeu-TTS](https://github.com/pnnbao97/VieNeu-TTS) |
 | Voice Conversion | [IAHispano/Applio](https://github.com/IAHispano/Applio) (RVC) |
-| LLM Brain | Qwen3.5 via [Mintplex-Labs/anything-llm](https://github.com/Mintplex-Labs/anything-llm) |
+| LLM | [QwenLM/Qwen3.5](https://github.com/QwenLM/Qwen3.5) via [Mintplex-Labs/anything-llm](https://github.com/Mintplex-Labs/anything-llm) |
 | Backend | [FastAPI](https://github.com/fastapi/fastapi) + [Pydantic](https://github.com/pydantic/pydantic) |
 | Frontend | [Gradio](https://github.com/gradio-app/gradio) |
-| Hardware | Apple MPS · Nvidia CUDA · CPU (auto-detected) |
 
 ## Architecture
 
 ```
-User → Microphone
-         ↓
-   [STT: faster-whisper]  →  transcript
-         ↓
-   [LLM: Qwen3.5]         →  text response
-         ↓
-   [TTS: fish-speech]      →  audio
-         ↓
-   [RVC: Applio] (optional) → cloned voice
-         ↓
-      Speaker ← User
+Mic → [STT] → text → [LLM] → response → [TTS] → audio → [RVC] → cloned voice → Speaker
 ```
-
-## Status
-
-> Work in progress — building phase by phase.
-
-- [x] Project structure & documentation
-- [x] Phase 1: Audio processing & STT pipeline
-- [x] Phase 2: TTS & voice cloning
-- [ ] Phase 3: Microservices & API Gateway
-- [ ] Phase 4: LLM integration
-- [ ] Phase 5: UI
-- [ ] Phase 6: Optimization & Docker
 
 ## Requirements
 
-**Local Development (macOS Apple Silicon):**
+- Python 3.11+ with [Miniforge](https://github.com/conda-forge/miniforge) (recommended)
+- `ffmpeg` (`brew install ffmpeg` on macOS)
+- Apple Silicon (MPS), Nvidia GPU (CUDA), or CPU — auto-detected
 
-- Apple Silicon Mac (M1/M2/M3/M4) with [Miniforge](https://github.com/conda-forge/miniforge)
-- `brew install ffmpeg`
-
-**Cloud / Server Deployment:**
-
-- Docker + Docker Compose
-- Nvidia GPU recommended (CUDA auto-detected), CPU fallback supported
-
-## Getting Started
-
-### Run scripts (local)
+## Quick Start
 
 ```bash
 conda activate voice
+make help
+```
 
-# Phase 1 — STT + chunking
+### Scripts (CLI)
+
+```bash
+# Transcribe audio
 python scripts/chunk_audio.py --input data/raw/YOUR_FILE.mp3
 
-# Phase 2 — fish-speech (English / multilingual TTS + cloning)
-python scripts/tts_infer.py --text "This is an AI version of Thao. What do you want to talk about?" --ref data/chunks/speech_chunk_0001.wav --ref-text "America is a cutting edge economy, but our immigration system is stuck in the past."
+# TTS with voice cloning (English)
+python scripts/tts_infer.py \
+    --text "Hello world" \
+    --ref data/chunks/speech_chunk_0001.wav \
+    --ref-text "Transcript of the reference audio"
 
-# Phase 2 — VieNeu-TTS (Vietnamese TTS, optional cloning)
-python scripts/vieneu_infer.py --text "Xin chào, hôm nay trời đẹp quá!"
+# TTS (Vietnamese)
+python scripts/vieneu_infer.py --text "Xin chào!"
 
-# Phase 2 — Applio RVC (voice conversion; requires a .pth voice model)
-python scripts/rvc_infer.py --input data/output.wav --model models/rvc/target_voice.pth
+# Voice conversion
+python scripts/rvc_infer.py --input data/output.wav --model models/rvc/target.pth
+```
+
+### Microservices (REST API)
+
+Start each service in its own terminal:
+
+```bash
+make run_stt          # :8001
+make run_tts          # :8002 (Vietnamese TTS, default)
+make run_tts_fish     # :8002 (fish-speech, multilingual)
+make run_tts_all      # :8002 (both engines, more RAM)
+make run_rvc          # :8003
+make run_gateway      # :8000 (proxies all services)
+```
+
+```bash
+curl http://localhost:8000/health
+curl -X POST http://localhost:8000/transcribe \
+    -F "audio=@data/chunks/speech_chunk_0001.wav"
+curl -X POST http://localhost:8000/tts/vieneu \
+    -F "text=Xin chào!" -o output.wav
+```
+
+### Development
+
+```bash
+make check    # format + lint (ruff)
 ```
 
 ## Privacy

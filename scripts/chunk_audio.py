@@ -19,11 +19,11 @@ import numpy as np
 import soundfile as sf
 from faster_whisper import WhisperModel
 
-DEFAULT_SAMPLE_RATE = 24_000   # Hz — high-fidelity for voice cloning
-MIN_CHUNK_DURATION  = 5.0      # seconds
-MAX_CHUNK_DURATION  = 15.0     # seconds
-SILENCE_TOP_DB      = 30       # dB below peak → treated as silence
-MAX_SILENCE_GAP     = 0.5      # seconds — merge speech bursts closer than this
+DEFAULT_SAMPLE_RATE = 24_000  # Hz — high-fidelity for voice cloning
+MIN_CHUNK_DURATION = 5.0  # seconds
+MAX_CHUNK_DURATION = 15.0  # seconds
+SILENCE_TOP_DB = 30  # dB below peak → treated as silence
+MAX_SILENCE_GAP = 0.5  # seconds — merge speech bursts closer than this
 
 logging.basicConfig(
     level=logging.INFO,
@@ -133,7 +133,7 @@ def export_chunks(
         out_path = output_dir / filename
 
         start_idx = int(start * sr)
-        end_idx   = int(end * sr)
+        end_idx = int(end * sr)
         sf.write(str(out_path), audio[start_idx:end_idx], sr, subtype="PCM_24")
 
         chunk_paths.append(out_path)
@@ -195,16 +195,43 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Chunk a long audio file and transcribe each chunk with Whisper."
     )
-    parser.add_argument("--input",   required=True,            help="Path to input audio file (.wav, .mp3, .flac, ...)")
-    parser.add_argument("--output",  default="data/chunks",    help="Output directory for WAV chunks (default: data/chunks)")
-    parser.add_argument("--model",   default="large-v3",       help="Whisper model size: tiny | base | small | medium | large-v3 (default: large-v3)")
-    parser.add_argument("--top-db",  type=int,   default=30,   help="Silence threshold in dB (default: 30). Raise if too many chunks, lower if too few.")
-    parser.add_argument("--min-dur", type=float, default=5.0,  help="Minimum chunk duration in seconds (default: 5)")
-    parser.add_argument("--max-dur", type=float, default=15.0, help="Maximum chunk duration in seconds (default: 15)")
+    parser.add_argument(
+        "--input",
+        required=True,
+        help="Path to input audio file (.wav, .mp3, .flac, ...)",
+    )
+    parser.add_argument(
+        "--output",
+        default="data/chunks",
+        help="Output directory for WAV chunks (default: data/chunks)",
+    )
+    parser.add_argument(
+        "--model",
+        default="large-v3",
+        help="Whisper model size: tiny | base | small | medium | large-v3 (default: large-v3)",
+    )
+    parser.add_argument(
+        "--top-db",
+        type=int,
+        default=30,
+        help="Silence threshold in dB (default: 30). Raise if too many chunks, lower if too few.",
+    )
+    parser.add_argument(
+        "--min-dur",
+        type=float,
+        default=5.0,
+        help="Minimum chunk duration in seconds (default: 5)",
+    )
+    parser.add_argument(
+        "--max-dur",
+        type=float,
+        default=15.0,
+        help="Maximum chunk duration in seconds (default: 15)",
+    )
     args = parser.parse_args()
 
-    input_path  = Path(args.input)
-    output_dir  = Path(args.output)
+    input_path = Path(args.input)
+    output_dir = Path(args.output)
     transcript_path = Path("data/transcript.csv")
 
     if not input_path.exists():
@@ -229,13 +256,11 @@ def main() -> None:
         {
             "chunk_id": f"{input_path.stem}_chunk_{i:04d}",
             "filename": path.name,
-            "text":     text,
+            "text": text,
             "duration": round(end - start, 2),
-            "path":     str(path),
+            "path": str(path),
         }
-        for i, (path, text, (start, end)) in enumerate(
-            zip(chunk_paths, transcripts, chunks), 1
-        )
+        for i, (path, text, (start, end)) in enumerate(zip(chunk_paths, transcripts, chunks), 1)
     ]
     save_transcript(records, transcript_path)
 

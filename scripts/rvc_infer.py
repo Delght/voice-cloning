@@ -80,24 +80,56 @@ def main() -> None:
     parser = argparse.ArgumentParser(
         description="Voice conversion using Applio RVC — swap voice identity while keeping prosody."
     )
-    parser.add_argument("--input",  required=True, help="Input audio file to convert")
-    parser.add_argument("--model",  required=True, help="Path to .pth voice model")
-    parser.add_argument("--index",  default="",    help="Path to .index file (optional, improves quality)")
+    parser.add_argument("--input", required=True, help="Input audio file to convert")
+    parser.add_argument("--model", required=True, help="Path to .pth voice model")
+    parser.add_argument(
+        "--index", default="", help="Path to .index file (optional, improves quality)"
+    )
     parser.add_argument("--output", default="data/output_rvc.wav", help="Output file path")
 
-    parser.add_argument("--pitch",          type=int,   default=0,      help="Pitch shift in semitones (e.g. +12 = 1 octave up, -12 = 1 octave down)")
-    parser.add_argument("--f0-method",      default="rmvpe",            help="F0 extraction method: rmvpe (default), crepe, fcpe, swift")
-    parser.add_argument("--index-rate",     type=float, default=0.75,   help="Index matching rate (0.0–1.0, higher = more like target voice)")
-    parser.add_argument("--protect",        type=float, default=0.5,    help="Protect consonants/breathing (0.0–1.0, higher = more protection)")
-    parser.add_argument("--clean-audio",    action="store_true",        help="Apply noise reduction before conversion")
-    parser.add_argument("--clean-strength", type=float, default=0.5,    help="Noise reduction strength (0.0–1.0)")
-    parser.add_argument("--export-format",  default="WAV",              help="Output format: WAV, MP3, FLAC, OGG, M4A")
+    parser.add_argument(
+        "--pitch",
+        type=int,
+        default=0,
+        help="Pitch shift in semitones (e.g. +12 = 1 octave up, -12 = 1 octave down)",
+    )
+    parser.add_argument(
+        "--f0-method",
+        default="rmvpe",
+        help="F0 extraction method: rmvpe (default), crepe, fcpe, swift",
+    )
+    parser.add_argument(
+        "--index-rate",
+        type=float,
+        default=0.75,
+        help="Index matching rate (0.0–1.0, higher = more like target voice)",
+    )
+    parser.add_argument(
+        "--protect",
+        type=float,
+        default=0.5,
+        help="Protect consonants/breathing (0.0–1.0, higher = more protection)",
+    )
+    parser.add_argument(
+        "--clean-audio",
+        action="store_true",
+        help="Apply noise reduction before conversion",
+    )
+    parser.add_argument(
+        "--clean-strength",
+        type=float,
+        default=0.5,
+        help="Noise reduction strength (0.0–1.0)",
+    )
+    parser.add_argument(
+        "--export-format", default="WAV", help="Output format: WAV, MP3, FLAC, OGG, M4A"
+    )
     args = parser.parse_args()
 
-    input_path  = Path(args.input).resolve()
-    model_path  = Path(args.model).resolve()
+    input_path = Path(args.input).resolve()
+    model_path = Path(args.model).resolve()
     output_path = Path(args.output).resolve()
-    index_path  = str(Path(args.index).resolve()) if args.index else ""
+    index_path = str(Path(args.index).resolve()) if args.index else ""
 
     if not input_path.exists():
         log.error(f"Input audio not found: {input_path}")
@@ -108,7 +140,10 @@ def main() -> None:
         return
 
     if not APPLIO_ROOT.exists():
-        log.error(f"Applio not found at {APPLIO_ROOT}. Run: git clone https://github.com/IAHispano/Applio.git ~/applio")
+        log.error(
+            f"Applio not found at {APPLIO_ROOT}. "
+            "Run: git clone https://github.com/IAHispano/Applio.git ~/applio"
+        )
         return
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

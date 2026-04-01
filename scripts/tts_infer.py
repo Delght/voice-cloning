@@ -6,7 +6,8 @@ from a short reference audio file (zero-shot, no training needed).
 
 Usage:
     python scripts/tts_infer.py --text "Hello world" --ref data/chunks/speech_chunk_0001.wav \
-        --ref-text "America is a cutting edge economy, but our immigration system is stuck in the past."
+        --ref-text "America is a cutting edge economy, but our immigration system is stuck "\
+        "in the past."
     python scripts/tts_infer.py --text "Xin chào" --ref data/chunks/speech_chunk_0001.wav \
         --ref-text "America is a cutting edge economy" --output data/output.wav
 """
@@ -30,22 +31,24 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-MODEL_DIR        = Path("models/fish-speech-1.5")
-DECODER_CKPT     = MODEL_DIR / "firefly-gan-vq-fsq-8x1024-21hz-generator.pth"
-DECODER_CONFIG   = "firefly_gan_vq"
+MODEL_DIR = Path("models/fish-speech-1.5")
+DECODER_CKPT = MODEL_DIR / "firefly-gan-vq-fsq-8x1024-21hz-generator.pth"
+DECODER_CONFIG = "firefly_gan_vq"
 
 # fish-speech decoder runs at 21 tokens/sec.
 # ~150 words/min in English = 2.5 words/sec → ~8 tokens per word.
-TOKENS_PER_WORD  = 10
-MIN_TOKENS       = 200
-MAX_TOKENS       = 2048
+TOKENS_PER_WORD = 10
+MIN_TOKENS = 200
+MAX_TOKENS = 2048
 
 
 def get_device() -> str:
     """Detect best available device — never hardcode."""
     return (
-        "cuda" if torch.cuda.is_available()
-        else "mps" if torch.backends.mps.is_available()
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
         else "cpu"
     )
 
@@ -53,10 +56,10 @@ def get_device() -> str:
 def load_engine():
     """Load fish-speech LLaMA + decoder models and return the inference engine."""
     from fish_speech.inference_engine import TTSInferenceEngine
-    from fish_speech.models.vqgan.inference import load_model as load_decoder
     from fish_speech.models.text2semantic.inference import launch_thread_safe_queue
+    from fish_speech.models.vqgan.inference import load_model as load_decoder
 
-    device    = get_device()
+    device = get_device()
     precision = torch.bfloat16
     log.info(f"Loading models | device: {device} | precision: bfloat16")
 
@@ -157,21 +160,44 @@ def synthesize(
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(
-        description="Zero-shot voice cloning TTS with fish-speech."
+    parser = argparse.ArgumentParser(description="Zero-shot voice cloning TTS with fish-speech.")
+    parser.add_argument("--text", required=True, help="Text to synthesize")
+    parser.add_argument(
+        "--ref",
+        required=True,
+        help="Reference audio (10–30s, clear voice, no BG noise)",
     )
-    parser.add_argument("--text",     required=True,  help="Text to synthesize")
-    parser.add_argument("--ref",      required=True,  help="Reference audio (10–30s, clear voice, no BG noise)")
-    parser.add_argument("--ref-text", default="",     help="Transcript of the reference audio — critical for cloning quality")
-    parser.add_argument("--output",   default="data/output.wav", help="Output WAV file")
+    parser.add_argument(
+        "--ref-text",
+        default="",
+        help="Transcript of the reference audio — critical for cloning quality",
+    )
+    parser.add_argument("--output", default="data/output.wav", help="Output WAV file")
 
-    parser.add_argument("--temperature",        type=float, default=0.7,  help="Sampling temperature (0.1–1.0, lower = more deterministic)")
-    parser.add_argument("--top-p",              type=float, default=0.7,  help="Nucleus sampling threshold (0.1–1.0)")
-    parser.add_argument("--repetition-penalty", type=float, default=1.2,  help="Penalize repeated tokens (0.9–2.0)")
-    parser.add_argument("--chunk-length",       type=int,   default=200,  help="Chars per iterative chunk (100–300)")
+    parser.add_argument(
+        "--temperature",
+        type=float,
+        default=0.7,
+        help="Sampling temperature (0.1–1.0, lower = more deterministic)",
+    )
+    parser.add_argument(
+        "--top-p", type=float, default=0.7, help="Nucleus sampling threshold (0.1–1.0)"
+    )
+    parser.add_argument(
+        "--repetition-penalty",
+        type=float,
+        default=1.2,
+        help="Penalize repeated tokens (0.9–2.0)",
+    )
+    parser.add_argument(
+        "--chunk-length",
+        type=int,
+        default=200,
+        help="Chars per iterative chunk (100–300)",
+    )
     args = parser.parse_args()
 
-    ref_path    = Path(args.ref)
+    ref_path = Path(args.ref)
     output_path = Path(args.output)
 
     if not ref_path.exists():
@@ -179,7 +205,10 @@ def main() -> None:
         return
 
     if not MODEL_DIR.exists():
-        log.error(f"Model weights not found: {MODEL_DIR}. Run Bước 2 in docs/02_phase_2_tts_and_cloning/setup.md")
+        log.error(
+            f"Model weights not found: {MODEL_DIR}. "
+            "Run Bước 2 in docs/02_phase_2_tts_and_cloning/setup.md"
+        )
         return
 
     if not args.ref_text:
