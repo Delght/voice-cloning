@@ -1,21 +1,11 @@
-"""VieNeu-TTS Engine — Vietnamese TTS model loading and synthesis.
-
-Uses **standard** mode which supports proper voice cloning via
-ref_audio + ref_text (phonemized and encoded into the LLM prompt).
-
-Turbo mode only uses a 128-dim speaker embedding and ignores ref_text
-entirely — that's why cloning quality was poor. Standard mode passes
-full speech token codes + phonemized ref_text into the prompt, matching
-the official VieNeu SDK documentation.
-
-Run:
-    uvicorn services.tts.app:app --port 8002
-"""
+"""VieNeu-TTS Engine — Vietnamese TTS model loading and synthesis."""
 
 from __future__ import annotations
 
+import gc
 import io
 import logging
+import os
 import tempfile
 from pathlib import Path
 
@@ -26,37 +16,26 @@ log = logging.getLogger(__name__)
 
 SAMPLE_RATE = 24_000
 
+# VieNeu backbone runs via llama-cpp-python (CPU only).
+# Codec (NeuCodec) supports cuda — set VIENEU_DEVICE=cuda on Nvidia cloud.
+_VIENEU_DEVICE = os.environ.get("VIENEU_DEVICE", "cpu")
+
 
 class VieNeuEngine:
-    """Wraps VieNeu-TTS (standard mode) for repeated synthesis calls.
-
-    Standard mode loads:
-      - Backbone: GGUF quantised LLM (via llama-cpp-python, CPU)
-      - Codec:    DistillNeuCodec (PyTorch, CPU)
-
-    Voice cloning flow (standard mode):
-      1. ref_audio → codec.encode_code() → speech token codes
-      2. ref_text  → phonemize() → ref phonemes
-      3. Prompt = ref_phonemes + input_phonemes + speech_token_codes
-      4. LLM generates new speech tokens conditioned on all of the above
-      5. codec.decode_code() → waveform
-
-    This is fundamentally different from turbo mode which only uses a
-    128-dim embedding and ignores ref_text.
-    """
+    """Wraps VieNeu-TTS (standard mode) for repeated synthesis calls."""
 
     def __init__(
         self,
         *,
         backbone_device: str = "cpu",
-        codec_device: str = "cpu",
+        codec_device: str = _VIENEU_DEVICE,
     ) -> None:
         self._backbone_device = backbone_device
         self._codec_device = codec_device
         self._engine = None
 
     def load(self) -> None:
-        from vieneu import Vieneu
+        from vieneu import Vieneu  # noqa: PLC0415
 
         log.info(
             "Loading VieNeu-TTS | mode=standard | backbone=%s | codec=%s",
@@ -74,6 +53,7 @@ class VieNeuEngine:
         if self._engine is not None:
             self._engine.close()
         self._engine = None
+        gc.collect()
         log.info("VieNeu-TTS engine unloaded.")
 
     @property
@@ -91,19 +71,7 @@ class VieNeuEngine:
         top_k: int = 50,
         max_chars: int = 256,
     ) -> tuple[bytes, int]:
-        """Synthesize Vietnamese speech and return (wav_bytes, sample_rate).
-
-        Args:
-            text: Text to synthesize (Vietnamese, English, or mixed).
-            ref_audio_bytes: Raw bytes of reference audio (3-5s) for cloning.
-            ref_text: Exact transcript of the reference audio.
-                      Critical for cloning quality — must match what is spoken.
-            temperature: Sampling temperature (standard mode default = 1.0).
-            top_k: Top-k sampling parameter.
-
-        Returns:
-            Tuple of (WAV file bytes, sample_rate).
-        """
+        """Synthesize Vietnamese speech and return (wav_bytes, sample_rate)."""
         if not self.ready:
             raise RuntimeError("VieNeu-TTS engine not loaded.")
 

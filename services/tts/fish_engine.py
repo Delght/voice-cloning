@@ -3,8 +3,10 @@
 Extracted from scripts/tts_infer.py for use as a long-running service.
 """
 
+import gc
 import io
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -12,12 +14,12 @@ import numpy as np
 import soundfile as sf
 import torch
 
-FISH_SPEECH_ROOT = Path.home() / "fish-speech"
+FISH_SPEECH_ROOT = Path(os.environ.get("FISH_SPEECH_ROOT", str(Path.home() / "fish-speech")))
 sys.path.insert(0, str(FISH_SPEECH_ROOT))
 
 log = logging.getLogger(__name__)
 
-MODEL_DIR = Path("models/fish-speech-1.5")
+MODEL_DIR = Path(os.environ.get("FISH_MODEL_DIR", "models/fish-speech-1.5"))
 DECODER_CKPT = MODEL_DIR / "firefly-gan-vq-fsq-8x1024-21hz-generator.pth"
 DECODER_CONFIG = "firefly_gan_vq"
 
@@ -43,18 +45,19 @@ def _estimate_max_tokens(text: str) -> int:
 
 
 class FishSpeechEngine:
-    """Wraps fish-speech for repeated TTS calls.
-
-    The model loads once at startup (~10-30s, 1.5GB RAM) and stays in memory.
-    """
+    """Wraps fish-speech for repeated TTS calls."""
 
     def __init__(self) -> None:
         self._engine = None
 
     def load(self) -> None:
-        from fish_speech.inference_engine import TTSInferenceEngine
-        from fish_speech.models.text2semantic.inference import launch_thread_safe_queue
-        from fish_speech.models.vqgan.inference import load_model as load_decoder
+        # Deferred: fish_speech only exists in the voice_fish conda env.
+        # Importing at module level would crash in the default voice env.
+        from fish_speech.inference_engine import TTSInferenceEngine  # noqa: PLC0415
+        from fish_speech.models.text2semantic.inference import (
+            launch_thread_safe_queue,  # noqa: PLC0415
+        )
+        from fish_speech.models.vqgan.inference import load_model as load_decoder  # noqa: PLC0415
 
         device = _get_device()
         precision = torch.bfloat16
@@ -85,6 +88,11 @@ class FishSpeechEngine:
 
     def unload(self) -> None:
         self._engine = None
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        elif torch.backends.mps.is_available():
+            torch.mps.empty_cache()
         log.info("fish-speech engine unloaded.")
 
     @property
@@ -102,24 +110,11 @@ class FishSpeechEngine:
         repetition_penalty: float = 1.2,
         chunk_length: int = 200,
     ) -> tuple[bytes, int]:
-        """Synthesize speech and return (wav_bytes, sample_rate).
-
-        Args:
-            text: Text to synthesize.
-            ref_audio_bytes: Raw bytes of the reference audio file.
-            ref_text: Transcript of the reference audio (critical for cloning).
-            temperature: Sampling temperature.
-            top_p: Nucleus sampling threshold.
-            repetition_penalty: Penalize repeated tokens.
-            chunk_length: Characters per iterative chunk.
-
-        Returns:
-            Tuple of (WAV file bytes, sample_rate).
-        """
+        """Synthesize speech and return (wav_bytes, sample_rate)."""
         if not self.ready:
             raise RuntimeError("fish-speech engine not loaded.")
 
-        from fish_speech.utils.schema import ServeReferenceAudio, ServeTTSRequest
+        from fish_speech.utils.schema import ServeReferenceAudio, ServeTTSRequest  # noqa: PLC0415
 
         max_tokens = _estimate_max_tokens(text)
         log.info(

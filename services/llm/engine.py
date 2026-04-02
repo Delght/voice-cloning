@@ -70,9 +70,7 @@ class LLMEngine:
         try:
             resp = await self._client.post(url, json={"message": message, "mode": "chat"})
         except httpx.ConnectError as e:
-            raise RuntimeError(
-                f"Cannot connect to Anything-LLM at {self.base_url}."
-            ) from e
+            raise RuntimeError(f"Cannot connect to Anything-LLM at {self.base_url}.") from e
         except httpx.TimeoutException as e:
             raise RuntimeError("Anything-LLM timed out.") from e
 

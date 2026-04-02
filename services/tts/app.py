@@ -8,12 +8,19 @@ Run:
     uvicorn services.tts.app:app --port 8002
 """
 
+from __future__ import annotations
+
 import logging
 import os
 from contextlib import asynccontextmanager
+from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, File, Form, UploadFile
 from fastapi.responses import JSONResponse, Response
+
+if TYPE_CHECKING:
+    from .fish_engine import FishSpeechEngine
+    from .vieneu_engine import VieNeuEngine
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,15 +29,12 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# Engine selection via environment variable.
-# TTS_ENGINES=vieneu      (default — lightweight, Vietnamese-optimized)
-# TTS_ENGINES=fish        (only fish-speech — multilingual, heavier)
-# TTS_ENGINES=fish,vieneu (both — uses more RAM)
+# TTS_ENGINES=vieneu (default) | fish | fish,vieneu
 _enabled = os.environ.get("TTS_ENGINES", "vieneu").lower().split(",")
 _enabled = [e.strip() for e in _enabled if e.strip()]
 
-fish_engine = None
-vieneu_engine = None
+fish_engine: FishSpeechEngine | None = None
+vieneu_engine: VieNeuEngine | None = None
 
 
 @asynccontextmanager

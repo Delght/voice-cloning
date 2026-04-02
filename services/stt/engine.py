@@ -6,6 +6,7 @@ The model loads once at startup and handles many requests.
 
 import io
 import logging
+import os
 
 import librosa
 import numpy as np
@@ -16,22 +17,34 @@ log = logging.getLogger(__name__)
 
 SAMPLE_RATE = 24_000
 
+# faster-whisper uses ctranslate2 which supports "cpu" and "cuda" (not MPS).
+# Set STT_DEVICE=cuda on cloud deployments with Nvidia GPU.
+_STT_DEVICE = os.environ.get("STT_DEVICE", "cpu")
+_STT_MODEL_SIZE = os.environ.get("STT_MODEL_SIZE", "large-v3")
+
 
 class STTEngine:
-    """Wraps faster-whisper for repeated transcription calls.
+    """Wraps faster-whisper for repeated transcription calls."""
 
-    The model loads once at startup (~500MB–1.5GB in RAM) and stays in memory
-    to serve all incoming requests.
-    """
-
-    def __init__(self, model_size: str = "large-v3") -> None:
+    def __init__(
+        self,
+        model_size: str = _STT_MODEL_SIZE,
+        device: str = _STT_DEVICE,
+    ) -> None:
         self.model_size = model_size
+        self._device = device
         self._model: WhisperModel | None = None
 
     def load(self) -> None:
         """Load the Whisper model into memory. Call once at service startup."""
-        log.info("Loading Whisper model '%s' (CPU/int8)...", self.model_size)
-        self._model = WhisperModel(self.model_size, device="cpu", compute_type="int8")
+        compute_type = "float16" if self._device == "cuda" else "int8"
+        log.info(
+            "Loading Whisper '%s' | device=%s | compute_type=%s",
+            self.model_size,
+            self._device,
+            compute_type,
+        )
+        self._model = WhisperModel(self.model_size, device=self._device, compute_type=compute_type)
         log.info("Whisper model loaded.")
 
     def unload(self) -> None:
@@ -49,15 +62,7 @@ class STTEngine:
         beam_size: int = 5,
         language: str | None = None,
     ) -> dict:
-        """Transcribe raw audio bytes and return structured result.
-
-        Args:
-            audio_bytes: Raw audio file content (wav, mp3, flac, etc.)
-            beam_size: Beam search width (higher = more accurate, slower)
-
-        Returns:
-            Dict with "text", "language", and "segments" keys.
-        """
+        """Transcribe raw audio bytes and return text, language, and segments."""
         if not self.ready:
             raise RuntimeError("STT engine not loaded. Server still starting up.")
 

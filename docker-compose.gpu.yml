@@ -1,0 +1,50 @@
+# GPU Override — Nvidia CUDA support for cloud deployment
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up --build
+#
+# Prerequisites:
+#   - nvidia-container-toolkit installed on the host
+#   - Verify: docker run --rm --gpus all nvidia/cuda:12.1.0-base-ubuntu22.04 nvidia-smi
+
+services:
+
+  stt:
+    build:
+      args:
+        TORCH_INDEX: https://download.pytorch.org/whl/cu121
+    environment:
+      - STT_DEVICE=cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  tts:
+    build:
+      args:
+        TORCH_INDEX: https://download.pytorch.org/whl/cu121
+    environment:
+      - VIENEU_DEVICE=cuda
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  rvc:
+    build:
+      args:
+        TORCH_INDEX: https://download.pytorch.org/whl/cu121
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

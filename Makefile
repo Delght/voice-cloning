@@ -4,11 +4,13 @@
 # ------------------------------------------------------------
 # Config
 # ------------------------------------------------------------
-CONDA_ENV ?= voice
+CONDA_ENV      ?= voice
+FISH_CONDA_ENV ?= voice_fish
 
 PY         := conda run -n $(CONDA_ENV) python
 RUFF       := conda run -n $(CONDA_ENV) ruff
 UVICORN    := conda run -n $(CONDA_ENV) uvicorn
+UVICORN_FISH := conda run -n $(FISH_CONDA_ENV) uvicorn
 
 GATEWAY_HOST ?= 127.0.0.1
 GATEWAY_PORT ?= 8000
@@ -93,7 +95,7 @@ run_tts:
 	$(UVICORN) services.tts.app:app --host $(TTS_HOST) --port $(TTS_PORT)
 
 run_tts_fish:
-	TTS_ENGINES=fish $(UVICORN) services.tts.app:app --host $(TTS_HOST) --port $(TTS_PORT)
+	TTS_ENGINES=fish $(UVICORN_FISH) services.tts.app:app --host $(TTS_HOST) --port $(TTS_PORT)
 
 run_tts_all:
 	TTS_ENGINES=fish,vieneu $(UVICORN) services.tts.app:app --host $(TTS_HOST) --port $(TTS_PORT)

@@ -1,31 +1,22 @@
-"""RVC Engine — Applio voice conversion model loading and inference.
+"""RVC Engine — Applio voice conversion model loading and inference."""
 
-Extracted from scripts/rvc_infer.py for use as a long-running service.
-
-Applio's VoiceConverter API works with file paths, not byte streams,
-so we use temporary files for input/output.
-"""
-
+import gc
 import logging
 import os
 import sys
 import tempfile
 from pathlib import Path
 
-APPLIO_ROOT = Path.home() / "applio"
+APPLIO_ROOT = Path(os.environ.get("APPLIO_ROOT", str(Path.home() / "applio")))
 sys.path.insert(0, str(APPLIO_ROOT))
 
 log = logging.getLogger(__name__)
 
-MODELS_DIR = Path("models/rvc")
+MODELS_DIR = Path(os.environ.get("RVC_MODELS_DIR", "models/rvc"))
 
 
 class RVCEngine:
-    """Wraps Applio VoiceConverter for repeated voice conversion calls.
-
-    Applio requires its CWD to be the applio root (for relative model paths),
-    so we temporarily change directory during each conversion call.
-    """
+    """Wraps Applio VoiceConverter for repeated voice conversion calls."""
 
     def __init__(self) -> None:
         self._vc = None
@@ -34,7 +25,7 @@ class RVCEngine:
         original_cwd = os.getcwd()
         os.chdir(str(APPLIO_ROOT))
         try:
-            from rvc.infer.infer import VoiceConverter
+            from rvc.infer.infer import VoiceConverter  # noqa: PLC0415
 
             self._vc = VoiceConverter()
             log.info("Applio VoiceConverter loaded.")
@@ -43,6 +34,16 @@ class RVCEngine:
 
     def unload(self) -> None:
         self._vc = None
+        gc.collect()
+        try:
+            import torch
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            elif torch.backends.mps.is_available():
+                torch.mps.empty_cache()
+        except ImportError:
+            pass
         log.info("Applio VoiceConverter unloaded.")
 
     @property
@@ -89,22 +90,7 @@ class RVCEngine:
         clean_audio: bool = False,
         clean_strength: float = 0.5,
     ) -> bytes:
-        """Convert voice in audio and return WAV bytes.
-
-        Args:
-            audio_bytes: Raw audio file bytes.
-            model_name: Name of the .pth model (without extension) or full path.
-            index_path: Path to .index file (optional).
-            pitch: Pitch shift in semitones.
-            f0_method: F0 extraction method (rmvpe, crepe, fcpe, swift).
-            index_rate: Index matching rate (0.0-1.0).
-            protect: Consonant protection (0.0-1.0).
-            clean_audio: Apply noise reduction.
-            clean_strength: Noise reduction strength.
-
-        Returns:
-            WAV file bytes of the converted audio.
-        """
+        """Convert voice in audio and return WAV bytes."""
         if not self.ready:
             raise RuntimeError("RVC engine not loaded.")
 

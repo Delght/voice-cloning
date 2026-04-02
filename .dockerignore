@@ -1,0 +1,43 @@
+# Git
+.git/
+.gitignore
+
+# Models and data — mounted as volumes at runtime, not baked into images
+models/
+data/
+*.pth
+*.gguf
+*.bin
+*.safetensors
+
+# Python caches
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+.venv/
+env/
+
+# Audio files in project root (test files)
+*.wav
+*.mp3
+*.m4a
+
+# Docs and markdown (not needed in runtime containers)
+docs/
+README.md
+architecture.md
+roadmap.md
+CLAUDE.md
+
+# IDE
+.vscode/
+.idea/
+*.DS_Store
+
+# Environment files (injected at runtime via docker-compose)
+.env

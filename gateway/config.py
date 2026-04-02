@@ -11,7 +11,10 @@ RVC_URL = os.environ.get("RVC_URL", "http://localhost:8003")
 LLM_URL = os.environ.get("LLM_URL", "http://localhost:8004")
 
 # httpx timeout in seconds — ML inference can be slow
-REQUEST_TIMEOUT = float(os.environ.get("GATEWAY_TIMEOUT", "300"))
+try:
+    REQUEST_TIMEOUT = float(os.environ.get("GATEWAY_TIMEOUT", "300"))
+except ValueError:
+    REQUEST_TIMEOUT = 300.0
 
 SERVICES = {
     "stt": STT_URL,

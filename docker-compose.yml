@@ -1,0 +1,106 @@
+services:
+
+  # ── STT (:8001) ────────────────────────────────────────────────────────────
+  stt:
+    build:
+      context: .
+      dockerfile: services/stt/Dockerfile
+    env_file: .env
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # ── TTS (:8002) ────────────────────────────────────────────────────────────
+  tts:
+    build:
+      context: .
+      dockerfile: services/tts/Dockerfile
+    env_file: .env
+    environment:
+      - TTS_ENGINES=${TTS_ENGINES:-vieneu}
+    volumes:
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8002/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s    # VieNeu loads GGUF — takes longer
+
+  # ── RVC (:8003) ────────────────────────────────────────────────────────────
+  rvc:
+    build:
+      context: .
+      dockerfile: services/rvc/Dockerfile
+    env_file: .env
+    volumes:
+      - ./models:/app/models:ro
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
+  # ── LLM Connector (:8004) ──────────────────────────────────────────────────
+  llm:
+    build:
+      context: .
+      dockerfile: services/llm/Dockerfile
+    env_file: .env
+    restart: unless-stopped
+    # Anything-LLM runs outside this stack (native or its own Docker container).
+    # host.docker.internal → resolves to the host machine from inside a container.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8004/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+  # ── API Gateway (:8000) ────────────────────────────────────────────────────
+  gateway:
+    build:
+      context: .
+      dockerfile: gateway/Dockerfile
+    env_file: .env
+    environment:
+      - STT_URL=http://stt:8001
+      - TTS_URL=http://tts:8002
+      - RVC_URL=http://rvc:8003
+      - LLM_URL=http://llm:8004
+    ports:
+      - "8000:8000"
+    depends_on:
+      stt:
+        condition: service_healthy
+      tts:
+        condition: service_healthy
+      llm:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # ── Gradio UI (:7860) ──────────────────────────────────────────────────────
+  ui:
+    build:
+      context: .
+      dockerfile: ui/Dockerfile
+    env_file: .env
+    environment:
+      - GATEWAY_URL=http://gateway:8000
+    ports:
+      - "7860:7860"
+    depends_on:
+      - gateway
+    restart: unless-stopped
