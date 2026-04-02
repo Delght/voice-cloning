@@ -79,6 +79,11 @@ curl -X POST http://localhost:8000/tts/vieneu \
 ### Scripts
 
 ```bash
+# Convert mp3/m4a → wav (batch, before using as reference audio)
+python scripts/convert_audio.py --input audio/input --output audio/output
+# or via make:
+make convert_audio
+
 python scripts/chunk_audio.py --input data/raw/YOUR_FILE.mp3
 python scripts/tts_infer.py --text "Hello" --ref data/chunks/speech_chunk_0001.wav --ref-text "..."
 python scripts/vieneu_infer.py --text "Xin chào!"

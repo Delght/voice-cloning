@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Git pre-commit hook — runs ruff format + lint before every commit.
+# Install: make install-hooks
+
+set -euo pipefail
+
+CONDA_ENV="${CONDA_ENV:-voice}"
+
+echo "[pre-commit] ruff format..."
+conda run --no-capture-output -n "$CONDA_ENV" ruff format services/ gateway/ scripts/ ui/
+
+echo "[pre-commit] ruff check..."
+if ! conda run --no-capture-output -n "$CONDA_ENV" ruff check services/ gateway/ scripts/ ui/; then
+    echo ""
+    echo "[pre-commit] Lint errors found. Run 'make fix' to auto-fix, then re-stage."
+    exit 1
+fi
+
+# Re-stage any files ruff format changed
+git diff --name-only | xargs -r git add
+
+echo "[pre-commit] OK"

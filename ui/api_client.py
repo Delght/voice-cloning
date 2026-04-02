@@ -7,6 +7,7 @@ Used by the Gradio UI — no model imports, just HTTP calls.
 from __future__ import annotations
 
 import os
+import subprocess
 import tempfile
 from pathlib import Path
 
@@ -35,6 +36,38 @@ def _raise_on_error(resp: httpx.Response) -> None:
         except Exception:
             detail = resp.text[:300]
         raise APIError(resp.status_code, detail)
+
+
+_NON_WAV = {".mp3", ".m4a", ".aac", ".ogg", ".flac", ".opus"}
+
+
+def _to_wav_bytes(audio_path: str) -> tuple[bytes, str]:
+    """Return (wav_bytes, filename). Converts non-WAV formats to WAV on the fly via ffmpeg."""
+    p = Path(audio_path)
+    if p.suffix.lower() not in _NON_WAV:
+        return p.read_bytes(), p.name
+
+    result = subprocess.run(
+        [
+            "ffmpeg",
+            "-y",
+            "-i",
+            str(p),
+            "-ac",
+            "1",
+            "-ar",
+            "44100",
+            "-c:a",
+            "pcm_s16le",
+            "-f",
+            "wav",
+            "pipe:1",
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        check=True,
+    )
+    return result.stdout, p.stem + ".wav"
 
 
 def _save_wav(wav_bytes: bytes) -> str:
@@ -92,13 +125,12 @@ def tts_vieneu(
         "max_chars": str(max_chars),
     }
     if ref_audio_path:
-        p = Path(ref_audio_path)
-        with open(ref_audio_path, "rb") as f:
-            resp = _client.post(
-                f"{GATEWAY_URL}/tts/vieneu",
-                data=data,
-                files={"ref_audio": (p.name, f, "application/octet-stream")},
-            )
+        wav_bytes, wav_name = _to_wav_bytes(ref_audio_path)
+        resp = _client.post(
+            f"{GATEWAY_URL}/tts/vieneu",
+            data=data,
+            files={"ref_audio": (wav_name, wav_bytes, "audio/wav")},
+        )
     else:
         resp = _client.post(f"{GATEWAY_URL}/tts/vieneu", data=data)
 
@@ -124,13 +156,12 @@ def tts_fish(
         "repetition_penalty": str(repetition_penalty),
         "chunk_length": str(chunk_length),
     }
-    p = Path(ref_audio_path)
-    with open(ref_audio_path, "rb") as f:
-        resp = _client.post(
-            f"{GATEWAY_URL}/tts/fish-speech",
-            data=data,
-            files={"ref_audio": (p.name, f, "application/octet-stream")},
-        )
+    wav_bytes, wav_name = _to_wav_bytes(ref_audio_path)
+    resp = _client.post(
+        f"{GATEWAY_URL}/tts/fish-speech",
+        data=data,
+        files={"ref_audio": (wav_name, wav_bytes, "audio/wav")},
+    )
     _raise_on_error(resp)
     return _save_wav(resp.content)
 
@@ -153,11 +184,11 @@ def convert_voice(
         "protect": str(protect),
         "clean_audio": str(clean_audio).lower(),
     }
-    with open(audio_path, "rb") as f:
-        resp = _client.post(
-            f"{GATEWAY_URL}/convert-voice",
-            data=data,
-            files={"audio": ("audio.wav", f, "audio/wav")},
-        )
+    wav_bytes, wav_name = _to_wav_bytes(audio_path)
+    resp = _client.post(
+        f"{GATEWAY_URL}/convert-voice",
+        data=data,
+        files={"audio": (wav_name, wav_bytes, "audio/wav")},
+    )
     _raise_on_error(resp)
     return _save_wav(resp.content)

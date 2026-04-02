@@ -1,5 +1,5 @@
 .DEFAULT_GOAL := help
-.PHONY: help fmt lint fix check run_gateway run_stt run_tts run_tts_fish run_tts_all run_rvc run_llm run_ui run_all stop_all health transcribe_sample tts_vieneu_sample chat_sample
+.PHONY: help fmt lint fix check install-hooks run_gateway run_stt run_tts run_tts_fish run_tts_all run_rvc run_llm run_ui run_all run_all_fish stop_all health transcribe_sample tts_vieneu_sample chat_sample convert_audio
 
 # ------------------------------------------------------------
 # Config
@@ -7,10 +7,10 @@
 CONDA_ENV      ?= voice
 FISH_CONDA_ENV ?= voice_fish
 
-PY         := conda run -n $(CONDA_ENV) python
-RUFF       := conda run -n $(CONDA_ENV) ruff
-UVICORN    := conda run -n $(CONDA_ENV) uvicorn
-UVICORN_FISH := conda run -n $(FISH_CONDA_ENV) uvicorn
+PY           := conda run --no-capture-output -n $(CONDA_ENV) python
+RUFF         := conda run --no-capture-output -n $(CONDA_ENV) ruff
+UVICORN      := conda run --no-capture-output -n $(CONDA_ENV) uvicorn
+UVICORN_FISH := conda run --no-capture-output -n $(FISH_CONDA_ENV) uvicorn
 
 GATEWAY_HOST ?= 127.0.0.1
 GATEWAY_PORT ?= 8000
@@ -39,14 +39,20 @@ help:
 	@echo ""
 	@echo "Voice project — handy commands"
 	@echo ""
+	@echo "Audio preprocessing:"
+	@echo "  make convert_audio   - batch convert mp3/m4a → wav (audio/input → audio/output)"
+	@echo "  make convert_audio AUDIO_INPUT=my/dir AUDIO_OUTPUT=out/dir"
+	@echo ""
 	@echo "Code quality:"
-	@echo "  make fmt        - format Python (ruff format)"
-	@echo "  make lint       - lint Python (ruff check)"
-	@echo "  make fix        - lint + autofix (ruff check --fix)"
-	@echo "  make check      - fmt + fix"
+	@echo "  make fmt           - format Python (ruff format)"
+	@echo "  make lint          - lint Python (ruff check)"
+	@echo "  make fix           - lint + autofix (ruff check --fix)"
+	@echo "  make check         - fmt + fix"
+	@echo "  make install-hooks - install git pre-commit hook (runs check before every commit)"
 	@echo ""
 	@echo "Run services:"
-	@echo "  make run_all          - start STT + TTS + LLM + Gateway"
+	@echo "  make run_all          - start STT + TTS(VieNeu) + LLM + Gateway"
+	@echo "  make run_all_fish     - start STT + TTS(fish-speech) + LLM + Gateway"
 	@echo "  make stop_all         - kill all services"
 	@echo "  make run_gateway"
 	@echo "  make run_stt"
@@ -71,6 +77,18 @@ help:
 # ------------------------------------------------------------
 # Code quality
 # ------------------------------------------------------------
+AUDIO_INPUT  ?= audio/input
+AUDIO_OUTPUT ?= audio/output
+
+# ------------------------------------------------------------
+# Audio preprocessing
+# ------------------------------------------------------------
+convert_audio:
+	$(PY) scripts/convert_audio.py --input $(AUDIO_INPUT) --output $(AUDIO_OUTPUT)
+
+# ------------------------------------------------------------
+# Code quality
+# ------------------------------------------------------------
 fmt:
 	$(RUFF) format services/ gateway/ scripts/ ui/
 
@@ -81,6 +99,11 @@ fix:
 	$(RUFF) check services/ gateway/ scripts/ ui/ --fix
 
 check: fmt fix
+
+install-hooks:
+	cp scripts/hooks/pre-commit .git/hooks/pre-commit
+	chmod +x .git/hooks/pre-commit
+	@echo "pre-commit hook installed."
 
 # ------------------------------------------------------------
 # Run services
@@ -112,6 +135,13 @@ run_ui:
 run_all:
 	@$(UVICORN) services.stt.app:app --host $(STT_HOST) --port $(STT_PORT) &
 	@$(UVICORN) services.tts.app:app --host $(TTS_HOST) --port $(TTS_PORT) &
+	@$(UVICORN) services.rvc.app:app --host $(RVC_HOST) --port $(RVC_PORT) &
+	@$(UVICORN) services.llm.app:app --host $(LLM_HOST) --port $(LLM_PORT) &
+	@$(UVICORN) gateway.app:app --host $(GATEWAY_HOST) --port $(GATEWAY_PORT)
+
+run_all_fish:
+	@$(UVICORN) services.stt.app:app --host $(STT_HOST) --port $(STT_PORT) &
+	@TTS_ENGINES=fish $(UVICORN_FISH) services.tts.app:app --host $(TTS_HOST) --port $(TTS_PORT) &
 	@$(UVICORN) services.rvc.app:app --host $(RVC_HOST) --port $(RVC_PORT) &
 	@$(UVICORN) services.llm.app:app --host $(LLM_HOST) --port $(LLM_PORT) &
 	@$(UVICORN) gateway.app:app --host $(GATEWAY_HOST) --port $(GATEWAY_PORT)
