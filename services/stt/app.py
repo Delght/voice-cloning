@@ -57,7 +57,7 @@ async def health():
 
 
 @app.post("/transcribe")
-async def transcribe(
+def transcribe(
     audio: UploadFile = File(..., description="Audio file (wav, mp3, flac, etc.)"),
     model: str = Form("large-v3", description="Whisper model size"),
     beam_size: int = Form(5, description="Beam search width"),
@@ -78,7 +78,7 @@ async def transcribe(
             engine.model_size,
         )
 
-    audio_bytes = await audio.read()
+    audio_bytes = audio.file.read()
     if not audio_bytes:
         return JSONResponse(status_code=400, content={"error": "Empty audio file"})
 

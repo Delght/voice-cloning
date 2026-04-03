@@ -60,7 +60,7 @@ async def health():
 
 
 @app.post("/convert-voice")
-async def convert_voice(
+def convert_voice(
     audio: UploadFile = File(..., description="Input audio file to convert"),
     voice_model: str = Form(
         ..., description="Voice model name (e.g. 'target') or path to .pth file"
@@ -78,7 +78,7 @@ async def convert_voice(
     The original prosody, emotion, and timing are preserved.
     Only the voice identity (timbre) changes.
     """
-    audio_bytes = await audio.read()
+    audio_bytes = audio.file.read()
     if not audio_bytes:
         return JSONResponse(status_code=400, content={"error": "Empty audio file"})
 

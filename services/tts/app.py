@@ -104,7 +104,7 @@ async def health():
 
 
 @app.post("/tts/fish-speech")
-async def tts_fish_speech(
+def tts_fish_speech(
     text: str = Form(..., description="Text to synthesize"),
     ref_audio: UploadFile = File(..., description="Reference audio for voice cloning (10-30s)"),
     ref_text: str = Form("", description="Transcript of reference audio (critical for quality)"),
@@ -123,7 +123,7 @@ async def tts_fish_speech(
     if not ref_text:
         log.warning("No ref_text provided — cloning quality will be degraded.")
 
-    ref_bytes = await ref_audio.read()
+    ref_bytes = ref_audio.file.read()
     if not ref_bytes:
         return JSONResponse(status_code=400, content={"error": "Empty reference audio file"})
 
@@ -145,7 +145,7 @@ async def tts_fish_speech(
 
 
 @app.post("/tts/vieneu")
-async def tts_vieneu(
+def tts_vieneu(
     text: str = Form(..., description="Text to synthesize (Vietnamese, English, or mixed)"),
     ref_audio: UploadFile | None = File(
         None, description="Optional reference audio for voice cloning (3-5s)"
@@ -172,7 +172,7 @@ async def tts_vieneu(
     ref_filename = None
     if ref_audio is not None:
         ref_filename = ref_audio.filename
-        ref_bytes = await ref_audio.read()
+        ref_bytes = ref_audio.file.read()
         if not ref_bytes:
             ref_bytes = None
 

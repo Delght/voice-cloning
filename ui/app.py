@@ -7,20 +7,94 @@ Run:
 
 from __future__ import annotations
 
+import os
+
 import gradio as gr
 
 from . import api_client
 
 TITLE = "Voice Cloning & AI Assistant"
 
+_REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+# Bundled default for Morgan-style fish-speech ref (place your sample here or upload in UI).
+_DEFAULT_MORGAN_WAV = os.path.join(_REPO_ROOT, "audio", "output", "morgan_freeman.wav")
+# Optional overrides (same paths as before if you prefer env over UI).
+VOICE_CHAT_FISH_REF_AUDIO = os.environ.get("VOICE_CHAT_FISH_REF_AUDIO", "").strip()
+VOICE_CHAT_FISH_REF_TEXT = os.environ.get("VOICE_CHAT_FISH_REF_TEXT", "").strip()
 
-def on_chat(audio_path: str | None):
+
+def _resolve_fish_ref_path(uploaded_ref: str | None) -> str | None:
+    """Upload wins, then env, then bundled morgan_freeman.wav if present."""
+    if uploaded_ref and os.path.isfile(uploaded_ref):
+        return uploaded_ref
+    if VOICE_CHAT_FISH_REF_AUDIO and os.path.isfile(VOICE_CHAT_FISH_REF_AUDIO):
+        return VOICE_CHAT_FISH_REF_AUDIO
+    if os.path.isfile(_DEFAULT_MORGAN_WAV):
+        return _DEFAULT_MORGAN_WAV
+    return None
+
+
+def on_chat(
+    audio_path: str | None,
+    engine_choice: str,
+    fish_ref_audio: str | None,
+    fish_ref_text: str,
+):
+    """STT → LLM → TTS with per-step status (mirrors gateway orchestrator, adds UX)."""
     if audio_path is None:
-        raise gr.Error("Record or upload an audio file first.")
+        yield "Error: record or upload an audio file first.", "", "", None
+        return
+
+    yield "Transcribing...", "", "", None
     try:
-        return api_client.chat(audio_path)
+        result = api_client.transcribe(audio_path)
     except api_client.APIError as e:
-        raise gr.Error(f"Pipeline error: {e.detail}") from e
+        yield f"Error at STT: {e.detail}", "", "", None
+        return
+
+    user_text = result.get("text", "").strip()
+    if not user_text:
+        yield "Error: could not transcribe audio — try speaking more clearly.", "", "", None
+        return
+
+    yield "Thinking...", user_text, "", None
+    try:
+        ai_text = api_client.llm_chat(user_text)
+    except api_client.APIError as e:
+        yield f"Error at LLM: {e.detail}", user_text, "", None
+        return
+
+    if not ai_text.strip():
+        yield "Error: AI returned an empty response.", user_text, "", None
+        return
+
+    yield f"Generating speech ({engine_choice})...", user_text, ai_text, None
+    try:
+        if "Fish" in engine_choice:
+            ref_path = _resolve_fish_ref_path(fish_ref_audio)
+            if not ref_path:
+                yield (
+                    "Error: fish-speech needs a reference WAV — upload in the accordion, "
+                    "or add audio/output/morgan_freeman.wav (or VOICE_CHAT_FISH_REF_AUDIO).",
+                    user_text,
+                    ai_text,
+                    None,
+                )
+                return
+            ref_txt = (fish_ref_text or "").strip() or VOICE_CHAT_FISH_REF_TEXT
+            audio_out = api_client.tts_fish(
+                text=ai_text,
+                ref_audio_path=ref_path,
+                ref_text=ref_txt,
+            )
+        else:
+            audio_out = api_client.tts_vieneu(text=ai_text)
+    except api_client.APIError as e:
+        yield f"Error at TTS: {e.detail}", user_text, ai_text, None
+        return
+
+    lang = result.get("language", "?")
+    yield f"Done — language: {lang}", user_text, ai_text, audio_out
 
 
 def on_tts(
@@ -163,10 +237,8 @@ def build_app() -> gr.Blocks:
 
         with gr.Tabs():
             with gr.TabItem("Voice Chat"):
-                gr.Markdown(
-                    "Record your voice → AI responds with speech. "
-                    "Requires: Gateway + STT + LLM + TTS."
-                )
+                gr.Markdown("Record your voice → AI transcribes, thinks, and responds with speech.")
+                chat_status = gr.Markdown(value="")
                 with gr.Row():
                     with gr.Column():
                         chat_audio_in = gr.Audio(
@@ -174,14 +246,59 @@ def build_app() -> gr.Blocks:
                             type="filepath",
                             label="Your voice",
                         )
+                        chat_tts_engine = gr.Radio(
+                            choices=["VieNeu (Fastest)", "Fish-Speech (Morgan Freeman)"],
+                            value="Fish-Speech (Morgan Freeman)",
+                            label="Voice engine (AI reply)",
+                        )
+                        with gr.Accordion("Fish-speech reference (timbre)", open=False):
+                            gr.Markdown(
+                                "Upload a sample, or use `audio/output/morgan_freeman.wav`, "
+                                "or set env `VOICE_CHAT_FISH_REF_AUDIO`. Transcript optional."
+                            )
+                            chat_fish_ref_audio = gr.Audio(
+                                sources=["upload"],
+                                type="filepath",
+                                label="Reference voice (optional)",
+                            )
+                            chat_fish_ref_text = gr.Textbox(
+                                label="Reference transcript (optional, auto-filled if you upload)",
+                                lines=2,
+                                placeholder="What the reference clip says — edit if STT is wrong",
+                            )
                         chat_btn = gr.Button("Send", variant="primary")
                     with gr.Column():
-                        chat_audio_out = gr.Audio(
-                            type="filepath",
-                            label="AI response",
+                        chat_user_text = gr.Textbox(
+                            label="You said",
+                            lines=2,
                             interactive=False,
                         )
-                chat_btn.click(on_chat, inputs=[chat_audio_in], outputs=[chat_audio_out])
+                        chat_ai_text = gr.Textbox(
+                            label="AI response",
+                            lines=3,
+                            interactive=False,
+                        )
+                        chat_audio_out = gr.Audio(
+                            type="filepath",
+                            label="AI voice",
+                            interactive=False,
+                            autoplay=True,
+                        )
+                chat_fish_ref_audio.change(
+                    fn=on_ref_audio_upload,
+                    inputs=[chat_fish_ref_audio],
+                    outputs=[chat_fish_ref_text],
+                )
+                chat_btn.click(
+                    on_chat,
+                    inputs=[
+                        chat_audio_in,
+                        chat_tts_engine,
+                        chat_fish_ref_audio,
+                        chat_fish_ref_text,
+                    ],
+                    outputs=[chat_status, chat_user_text, chat_ai_text, chat_audio_out],
+                )
 
             with gr.TabItem("Text-to-Speech"):
                 gr.Markdown(

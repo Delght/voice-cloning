@@ -28,4 +28,5 @@ ROUTE_MAP = {
     "/tts/fish-speech": f"{TTS_URL}/tts/fish-speech",
     "/tts/vieneu": f"{TTS_URL}/tts/vieneu",
     "/convert-voice": f"{RVC_URL}/convert-voice",
+    "/llm/chat": f"{LLM_URL}/chat",
 }

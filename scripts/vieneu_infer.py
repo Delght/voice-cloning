@@ -26,7 +26,7 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-def load_engine(mode: str = "turbo"):
+def load_engine(mode: str = "standard"):
     """Initialize VieNeu-TTS engine."""
     from vieneu import Vieneu
 
@@ -95,9 +95,12 @@ def main() -> None:
     parser.add_argument("--output", default="data/output_vi.wav", help="Output WAV file")
     parser.add_argument(
         "--mode",
-        default="turbo",
-        choices=["turbo", "standard"],
-        help="Engine mode (turbo=CPU/GGUF, standard=PyTorch)",
+        default="standard",
+        choices=["standard", "turbo"],
+        help=(
+            "Engine mode (standard=PyTorch, supports ref_text cloning |"
+            " turbo=CPU/GGUF, faster but no ref_text)"
+        ),
     )
 
     parser.add_argument(

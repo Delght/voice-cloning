@@ -85,27 +85,38 @@ def health() -> dict:
 
 
 def chat(audio_path: str) -> str:
-    with open(audio_path, "rb") as f:
-        resp = _client.post(
-            f"{GATEWAY_URL}/chat",
-            files={"audio": ("audio.wav", f, "audio/wav")},
-        )
+    """POST /chat: full STT→LLM→TTS. For Makefile/scripts; UI uses stepwise calls for progress."""
+    wav_bytes, wav_name = _to_wav_bytes(audio_path)
+    resp = _client.post(
+        f"{GATEWAY_URL}/chat",
+        files={"audio": (wav_name, wav_bytes, "audio/wav")},
+    )
     _raise_on_error(resp)
     return _save_wav(resp.content)
 
 
 def transcribe(audio_path: str, *, language: str | None = None) -> dict:
-    with open(audio_path, "rb") as f:
-        data = {}
-        if language:
-            data["language"] = language
-        resp = _client.post(
-            f"{GATEWAY_URL}/transcribe",
-            data=data or None,
-            files={"audio": ("audio.wav", f, "audio/wav")},
-        )
+    wav_bytes, wav_name = _to_wav_bytes(audio_path)
+    data = {}
+    if language:
+        data["language"] = language
+    resp = _client.post(
+        f"{GATEWAY_URL}/transcribe",
+        data=data or None,
+        files={"audio": (wav_name, wav_bytes, "audio/wav")},
+    )
     _raise_on_error(resp)
     return resp.json()
+
+
+def llm_chat(message: str) -> str:
+    """POST /llm/chat via gateway — text-only LLM for UI progress flow."""
+    resp = _client.post(
+        f"{GATEWAY_URL}/llm/chat",
+        json={"message": message},
+    )
+    _raise_on_error(resp)
+    return resp.json().get("text", "")
 
 
 def tts_vieneu(

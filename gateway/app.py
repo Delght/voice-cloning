@@ -9,6 +9,7 @@ Endpoints:
     POST /tts/fish-speech   -> TTS :8002
     POST /tts/vieneu        -> TTS :8002
     POST /convert-voice     -> RVC :8003
+    POST /llm/chat          -> LLM :8004
     GET  /health            -> aggregate health from all services
     GET  /health/{service}  -> health check a single service
 """
@@ -148,6 +149,11 @@ async def proxy_tts_vieneu(request: Request):
 @app.post("/convert-voice")
 async def proxy_convert_voice(request: Request):
     return await _proxy(request, ROUTE_MAP["/convert-voice"])
+
+
+@app.post("/llm/chat")
+async def proxy_llm_chat(request: Request):
+    return await _proxy(request, ROUTE_MAP["/llm/chat"])
 
 
 # --- Health checks ---
