@@ -116,6 +116,11 @@ python scripts/rvc_infer.py --input data/output.wav --model models/rvc/target.pt
 ```bash
 make check    # ruff format + lint
 ```
+## Google Colab
+
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ngduythao/voice-clone/blob/main/Voice_Colab.ipynb)
+
+To run this project on Google Colab with GPU support, click the badge above to open the provided notebook. Run the cells sequentially to start all services and obtain the public Gradio link for the UI.
 
 ## Docker
 

@@ -471,4 +471,5 @@ def build_app() -> gr.Blocks:
 
 
 if __name__ == "__main__":
-    build_app().launch(server_name="0.0.0.0", server_port=7860)
+    share = os.environ.get("GRADIO_SHARE", "false").lower() == "true"
+    build_app().launch(server_name="0.0.0.0", server_port=7860, share=share)
