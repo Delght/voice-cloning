@@ -8,7 +8,11 @@ Zero shot voice cloning: Clone any voice from a 10 to 30s audio sample. No train
 
 ![Demo UI](docs/images/demo.png)
 
-<video src="https://github.com/user-attachments/assets/8704a7d8-fe15-47e7-85ce-a0235b8c3809" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/350ab4ae-8efc-4d35-9ed3-310042c8ef68" controls width="100%"></video>
+
+
+
+
 
 
 ## Stack
@@ -118,7 +122,7 @@ make check    # ruff format + lint
 ```
 ## Google Colab
 
-[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/ngduythao/voice-clone/blob/main/Voice_Colab.ipynb)
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/singswap/voice-cloning/blob/main/Voice_Colab.ipynb)
 
 To run this project on Google Colab with GPU support, click the badge above to open the provided notebook. Run the cells sequentially to start all services and obtain the public Gradio link for the UI.
 
