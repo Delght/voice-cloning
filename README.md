@@ -6,7 +6,10 @@ Self-hosted voice cloning and conversational AI. Zero external APIs.
 
 ## Demo
 
-<video src="https://github.com/user-attachments/assets/ac9be32c-dcc3-43a0-b067-3b04df8a3f00" controls width="100%"></video>
+<video src="https://github.com/user-attachments/assets/8704a7d8-fe15-47e7-85ce-a0235b8c3809" controls width="100%"></video>
+
+
+
 
 
 
