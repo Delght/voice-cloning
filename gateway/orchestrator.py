@@ -1,4 +1,4 @@
-"""Orchestrator — STT → LLM → TTS pipeline for POST /chat.
+"""Orchestrator: STT → LLM → TTS pipeline for POST /chat.
 
 Pipeline:
     1. POST :8001/transcribe  (STT)  audio bytes  → user text
@@ -38,7 +38,7 @@ async def run_chat_pipeline(audio_bytes: bytes, client: httpx.AsyncClient) -> by
     Raises:
         PipelineError: If any stage fails.
     """
-    log.info("STT ← %d bytes", len(audio_bytes))
+
     try:
         stt_resp = await client.post(
             f"{STT_URL}/transcribe",
@@ -56,9 +56,6 @@ async def run_chat_pipeline(audio_bytes: bytes, client: httpx.AsyncClient) -> by
     if not user_text:
         raise PipelineError("STT", "Empty transcript.", 422)
 
-    log.info("STT → '%s'", user_text[:120])
-
-    log.info("LLM ←")
     try:
         llm_resp = await client.post(f"{LLM_URL}/chat", json={"message": user_text})
     except httpx.ConnectError:
@@ -73,9 +70,6 @@ async def run_chat_pipeline(audio_bytes: bytes, client: httpx.AsyncClient) -> by
     if not response_text:
         raise PipelineError("LLM", "Empty response.", 502)
 
-    log.info("LLM → '%s'", response_text[:120])
-
-    log.info("TTS ←")
     try:
         tts_resp = await client.post(f"{TTS_URL}/tts/vieneu", data={"text": response_text})
     except httpx.ConnectError:
@@ -90,5 +84,4 @@ async def run_chat_pipeline(audio_bytes: bytes, client: httpx.AsyncClient) -> by
     if not audio_out:
         raise PipelineError("TTS", "Empty audio response.", 502)
 
-    log.info("TTS → %d bytes", len(audio_out))
     return audio_out

@@ -1,8 +1,8 @@
-"""TTS Microservice — Text-to-Speech via fish-speech and VieNeu-TTS.
+"""TTS Microservice: Text-to-Speech via fish-speech and VieNeu-TTS.
 
 Hosts two TTS engines behind separate endpoints:
-    POST /tts/fish-speech  — multilingual, zero-shot voice cloning
-    POST /tts/vieneu       — Vietnamese-optimized, optional voice cloning
+    POST /tts/fish-speech  - multilingual, zero-shot voice cloning
+    POST /tts/vieneu       - Vietnamese-optimized, optional voice cloning
 
 Run:
     uvicorn services.tts.app:app --port 8002
@@ -62,7 +62,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Voice — TTS Service",
+    title="Voice - TTS Service",
     description="Text-to-Speech with fish-speech (multilingual) and VieNeu-TTS (Vietnamese)",
     version="0.1.0",
     lifespan=lifespan,
@@ -121,7 +121,7 @@ def tts_fish_speech(
         )
 
     if not ref_text:
-        log.warning("No ref_text provided — cloning quality will be degraded.")
+        log.warning("No ref_text provided - cloning quality will be degraded.")
 
     ref_bytes = ref_audio.file.read()
     if not ref_bytes:

@@ -1,4 +1,4 @@
-"""RVC Microservice — Voice Conversion via Applio.
+"""RVC Microservice: Voice Conversion via Applio.
 
 Run:
     uvicorn services.rvc.app:app --port 8003
@@ -30,8 +30,8 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Voice — RVC Service",
-    description="Voice conversion via Applio RVC — swap voice identity while preserving prosody",
+    title="Voice - RVC Service",
+    description="Voice conversion via Applio RVC - swap voice identity while preserving prosody",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -81,13 +81,6 @@ def convert_voice(
     audio_bytes = audio.file.read()
     if not audio_bytes:
         return JSONResponse(status_code=400, content={"error": "Empty audio file"})
-
-    log.info(
-        "Converting %s (%d bytes) with model '%s'",
-        audio.filename,
-        len(audio_bytes),
-        voice_model,
-    )
 
     try:
         wav_bytes = engine.convert(

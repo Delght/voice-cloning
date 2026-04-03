@@ -1,4 +1,4 @@
-"""API Gateway — reverse proxy for Voice microservices.
+"""API Gateway: reverse proxy for Voice microservices.
 
 Run:
     uvicorn gateway.app:app --port 8000
@@ -46,7 +46,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Voice — API Gateway",
+    title="Voice - API Gateway",
     description="Reverse proxy and orchestrator for STT, TTS, RVC, and LLM microservices",
     version="0.1.0",
     lifespan=lifespan,
@@ -109,8 +109,6 @@ async def chat(
     audio_bytes = await audio.read()
     if not audio_bytes:
         return JSONResponse(status_code=400, content={"error": "Empty audio file"})
-
-    log.info("/chat: received audio '%s' (%d bytes)", audio.filename, len(audio_bytes))
 
     try:
         response_wav = await run_chat_pipeline(audio_bytes, _client)

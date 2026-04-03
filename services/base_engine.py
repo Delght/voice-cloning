@@ -1,4 +1,4 @@
-"""Shared engine Protocol — defines the load/unload/ready contract."""
+"""Shared engine Protocol: defines the load/unload/ready contract."""
 
 from typing import Protocol, runtime_checkable
 

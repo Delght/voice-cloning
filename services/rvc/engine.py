@@ -1,4 +1,4 @@
-"""RVC Engine — Applio voice conversion model loading and inference."""
+"""RVC Engine: Applio voice conversion model loading and inference."""
 
 import gc
 import logging
@@ -106,12 +106,6 @@ class RVCEngine:
         os.chdir(str(APPLIO_ROOT))
 
         try:
-            log.info(
-                "Converting: model=%s | pitch=%d | f0=%s",
-                model_path.name,
-                pitch,
-                f0_method,
-            )
             self._vc.convert_audio(
                 audio_input_path=input_path,
                 audio_output_path=output_path,
@@ -131,7 +125,6 @@ class RVCEngine:
                 raise RuntimeError("Conversion produced no output file.")
 
             wav_bytes = result_path.read_bytes()
-            log.info("Conversion complete: %d bytes", len(wav_bytes))
             return wav_bytes
 
         finally:

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""rvc_infer.py — Phase 2: Voice Conversion with Applio RVC
+"""rvc_infer.py: Voice Conversion with Applio RVC
 
 Converts the voice in an existing audio file to a target voice
 using a trained .pth model, preserving the original prosody and emotion.
@@ -78,7 +78,7 @@ def convert(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="Voice conversion using Applio RVC — swap voice identity while keeping prosody."
+        description="Voice conversion using Applio RVC - swap voice identity while keeping prosody."
     )
     parser.add_argument("--input", required=True, help="Input audio file to convert")
     parser.add_argument("--model", required=True, help="Path to .pth voice model")

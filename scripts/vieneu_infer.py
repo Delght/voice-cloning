@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""vieneu_infer.py — Phase 2: Vietnamese TTS Inference
+"""vieneu_infer.py: Vietnamese TTS Inference
 
 Generates Vietnamese speech from text using VieNeu-TTS,
 with optional zero-shot voice cloning from a short reference audio (3–5s).
@@ -67,7 +67,7 @@ def synthesize(
         return
 
     if audio is None or len(audio) == 0:
-        log.error("No audio generated — check input text.")
+        log.error("No audio generated - check input text.")
         return
 
     output_path.parent.mkdir(parents=True, exist_ok=True)

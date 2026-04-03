@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""chunk_audio.py — Phase 1 Data Preparation Script
+"""chunk_audio.py: Data Preparation Script
 
 Splits a long audio file into 5–15s chunks at silence boundaries,
 transcribes each chunk with faster-whisper, and exports a transcript.csv.
@@ -19,11 +19,11 @@ import numpy as np
 import soundfile as sf
 from faster_whisper import WhisperModel
 
-DEFAULT_SAMPLE_RATE = 24_000  # Hz — high-fidelity for voice cloning
+DEFAULT_SAMPLE_RATE = 24_000  # Hz - high-fidelity for voice cloning
 MIN_CHUNK_DURATION = 5.0  # seconds
 MAX_CHUNK_DURATION = 15.0  # seconds
 SILENCE_TOP_DB = 30  # dB below peak → treated as silence
-MAX_SILENCE_GAP = 0.5  # seconds — merge speech bursts closer than this
+MAX_SILENCE_GAP = 0.5  # seconds - merge speech bursts closer than this
 
 logging.basicConfig(
     level=logging.INFO,
@@ -54,7 +54,7 @@ def detect_speech_intervals(
     Args:
         audio:   numpy float32 array
         sr:      sample rate
-        top_db:  silence threshold — regions quieter than (peak - top_db dB) = silence
+        top_db:  silence threshold - regions quieter than (peak - top_db dB) = silence
         max_gap: gaps smaller than this (seconds) between speech bursts get merged
 
     Returns:
@@ -150,7 +150,7 @@ def transcribe_chunks(
     Transcribe audio chunks with faster-whisper.
 
     Note: faster-whisper uses CTranslate2 engine which does NOT support MPS.
-    It runs on CPU on macOS — this is expected and still fast thanks to INT8 quantization.
+    It runs on CPU on macOS - this is expected and still fast thanks to INT8 quantization.
 
     Returns:
         List of transcript strings, one per chunk.

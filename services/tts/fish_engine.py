@@ -1,4 +1,4 @@
-"""fish-speech TTS Engine — model loading and synthesis.
+"""fish-speech TTS Engine: model loading and synthesis.
 
 Extracted from scripts/tts_infer.py for use as a long-running service.
 """
@@ -198,13 +198,6 @@ class FishSpeechEngine:
         if not chunks:
             raise RuntimeError("Empty text after preprocessing.")
 
-        log.info(
-            "Synthesizing: %d chunks | chunk_length=%d | ref_text='%s'",
-            len(chunks),
-            chunk_length,
-            ref_text[:40],
-        )
-
         def _infer_once(
             *,
             t: str,
@@ -235,21 +228,13 @@ class FishSpeechEngine:
 
             if not audio_chunks:
                 raise RuntimeError(
-                    "No audio generated for a chunk — check input text or reference."
+                    "No audio generated for a chunk - check input text or reference."
                 )
 
             return np.concatenate(audio_chunks), sr
 
         for idx, chunk_text in enumerate(chunks):
             max_tokens = _estimate_max_tokens(chunk_text)
-            log.info(
-                "Chunk %d/%d: chars=%d | max_tokens=%d | text='%s'",
-                idx + 1,
-                len(chunks),
-                len(chunk_text),
-                max_tokens,
-                chunk_text[:60],
-            )
 
             chunk_audio, sample_rate = _infer_once(
                 t=chunk_text,
@@ -268,12 +253,4 @@ class FishSpeechEngine:
         buf = io.BytesIO()
         sf.write(buf, full_audio, sample_rate, format="WAV")
         wav_bytes = buf.getvalue()
-
-        duration = len(full_audio) / sample_rate
-        log.info(
-            "Generated %.1fs audio @ %dHz (%d bytes)",
-            duration,
-            sample_rate,
-            len(wav_bytes),
-        )
         return wav_bytes, sample_rate

@@ -1,4 +1,4 @@
-"""VieNeu-TTS Engine — Vietnamese TTS model loading and synthesis."""
+"""VieNeu-TTS Engine: Vietnamese TTS model loading and synthesis."""
 
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ log = logging.getLogger(__name__)
 SAMPLE_RATE = 24_000
 
 # VieNeu backbone runs via llama-cpp-python (CPU only).
-# Codec (NeuCodec) supports cuda — set VIENEU_DEVICE=cuda on Nvidia cloud.
+# Codec (NeuCodec) supports cuda - set VIENEU_DEVICE=cuda on Nvidia cloud.
 _VIENEU_DEVICE = os.environ.get("VIENEU_DEVICE", "cpu")
 
 
@@ -75,8 +75,6 @@ class VieNeuEngine:
         if not self.ready:
             raise RuntimeError("VieNeu-TTS engine not loaded.")
 
-        log.info("Synthesizing (VieNeu): text='%s'", text[:60])
-
         audio: np.ndarray
 
         if ref_audio_bytes is not None:
@@ -103,13 +101,9 @@ class VieNeuEngine:
                 }
                 if ref_text:
                     kwargs["ref_text"] = ref_text
-                    log.info(
-                        "Cloning with ref_audio + ref_text (%d chars)",
-                        len(ref_text),
-                    )
                 else:
                     log.warning(
-                        "ref_text not provided — cloning quality "
+                        "ref_text not provided - cloning quality "
                         "will be degraded. Provide the exact transcript "
                         "of the reference audio for best results."
                     )
@@ -126,17 +120,9 @@ class VieNeuEngine:
             )
 
         if audio is None or len(audio) == 0:
-            raise RuntimeError("No audio generated — check input text.")
+            raise RuntimeError("No audio generated - check input text.")
 
         buf = io.BytesIO()
         sf.write(buf, audio, SAMPLE_RATE, format="WAV")
         wav_bytes = buf.getvalue()
-
-        duration = len(audio) / SAMPLE_RATE
-        log.info(
-            "Generated %.1fs audio @ %dHz (%d bytes)",
-            duration,
-            SAMPLE_RATE,
-            len(wav_bytes),
-        )
         return wav_bytes, SAMPLE_RATE

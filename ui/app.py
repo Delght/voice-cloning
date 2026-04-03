@@ -1,4 +1,4 @@
-"""Voice Cloning & AI Assistant — Gradio Web UI.
+"""Voice Cloning & AI Assistant: Gradio Web UI.
 
 Run:
     python -m ui.app
@@ -74,8 +74,8 @@ def on_chat(
             ref_path = _resolve_fish_ref_path(fish_ref_audio)
             if not ref_path:
                 yield (
-                    "Error: fish-speech needs a reference WAV — upload in the accordion, "
-                    "or add audio/output/morgan_freeman.wav (or VOICE_CHAT_FISH_REF_AUDIO).",
+                    "Error: fish-speech needs a reference WAV"
+                    "or add audio/output/morgan_freeman.wav",
                     user_text,
                     ai_text,
                     None,
@@ -89,12 +89,11 @@ def on_chat(
             )
         else:
             audio_out = api_client.tts_vieneu(text=ai_text)
-    except api_client.APIError as e:
-        yield f"Error at TTS: {e.detail}", user_text, ai_text, None
+    except api_client.APIError:
+        yield "", user_text, ai_text, None
         return
 
-    lang = result.get("language", "?")
-    yield f"Done — language: {lang}", user_text, ai_text, audio_out
+    yield "", user_text, ai_text, audio_out
 
 
 def on_tts(
@@ -225,7 +224,7 @@ def on_health_check():
         for svc in data.get("services", []):
             status = svc.get("status", "?")
             icon = {"ok": "OK", "down": "DOWN", "timeout": "TIMEOUT"}.get(status, status)
-            lines.append(f"- **{svc['service']}** ({svc.get('url', '')}) — {icon}")
+            lines.append(f"- **{svc['service']}** ({svc.get('url', '')}) - {icon}")
         return "\n".join(lines)
     except Exception as e:
         return f"**Error:** {e}"
@@ -237,7 +236,6 @@ def build_app() -> gr.Blocks:
 
         with gr.Tabs():
             with gr.TabItem("Voice Chat"):
-                gr.Markdown("Record your voice → AI transcribes, thinks, and responds with speech.")
                 chat_status = gr.Markdown(value="")
                 with gr.Row():
                     with gr.Column():
@@ -252,10 +250,6 @@ def build_app() -> gr.Blocks:
                             label="Voice engine (AI reply)",
                         )
                         with gr.Accordion("Fish-speech reference (timbre)", open=False):
-                            gr.Markdown(
-                                "Upload a sample, or use `audio/output/morgan_freeman.wav`, "
-                                "or set env `VOICE_CHAT_FISH_REF_AUDIO`. Transcript optional."
-                            )
                             chat_fish_ref_audio = gr.Audio(
                                 sources=["upload"],
                                 type="filepath",
@@ -264,7 +258,7 @@ def build_app() -> gr.Blocks:
                             chat_fish_ref_text = gr.Textbox(
                                 label="Reference transcript (optional, auto-filled if you upload)",
                                 lines=2,
-                                placeholder="What the reference clip says — edit if STT is wrong",
+                                placeholder="What the reference clip says - edit if STT is wrong",
                             )
                         chat_btn = gr.Button("Send", variant="primary")
                     with gr.Column():
@@ -301,11 +295,6 @@ def build_app() -> gr.Blocks:
                 )
 
             with gr.TabItem("Text-to-Speech"):
-                gr.Markdown(
-                    "VieNeu: Vietnamese-optimized. fish-speech: multilingual cloning. "
-                    "Upload a reference audio — transcript is auto-filled via STT. "
-                    "Review and correct if needed for best cloning quality."
-                )
                 with gr.Row():
                     with gr.Column():
                         tts_text = gr.Textbox(
@@ -403,10 +392,6 @@ def build_app() -> gr.Blocks:
                 )
 
             with gr.TabItem("Voice Conversion"):
-                gr.Markdown(
-                    "Convert the voice identity while preserving prosody. "
-                    "Requires a trained RVC `.pth` model."
-                )
                 with gr.Row():
                     with gr.Column():
                         rvc_audio_in = gr.Audio(
@@ -455,7 +440,6 @@ def build_app() -> gr.Blocks:
                 )
 
             with gr.TabItem("Transcribe"):
-                gr.Markdown("Transcribe audio to text with timestamps.")
                 with gr.Row():
                     with gr.Column():
                         stt_audio_in = gr.Audio(

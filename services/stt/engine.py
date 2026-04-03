@@ -1,4 +1,4 @@
-"""STT Engine — Whisper model loading and transcription.
+"""STT Engine: Whisper model loading and transcription.
 
 Extracted from scripts/chunk_audio.py for use as a long-running service.
 The model loads once at startup and handles many requests.

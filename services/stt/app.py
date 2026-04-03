@@ -1,4 +1,4 @@
-"""STT Microservice — Speech-to-Text via faster-whisper.
+"""STT Microservice: Speech-to-Text via faster-whisper.
 
 Run:
     uvicorn services.stt.app:app --port 8001
@@ -30,7 +30,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Voice — STT Service",
+    title="Voice - STT Service",
     description="Speech-to-Text transcription via faster-whisper",
     version="0.1.0",
     lifespan=lifespan,
@@ -82,8 +82,6 @@ def transcribe(
     if not audio_bytes:
         return JSONResponse(status_code=400, content={"error": "Empty audio file"})
 
-    log.info("Transcribing %s (%d bytes)", audio.filename, len(audio_bytes))
     result = engine.transcribe(audio_bytes, beam_size=beam_size, language=language)
-    log.info("Result: lang=%s, text='%s'", result["language"], result["text"][:80])
 
     return result

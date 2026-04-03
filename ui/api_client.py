@@ -1,7 +1,7 @@
 """HTTP client for the Voice Gateway API.
 
 Wraps all Gateway endpoints as simple Python functions.
-Used by the Gradio UI — no model imports, just HTTP calls.
+Used by the Gradio UI - no model imports, just HTTP calls.
 """
 
 from __future__ import annotations
@@ -110,7 +110,7 @@ def transcribe(audio_path: str, *, language: str | None = None) -> dict:
 
 
 def llm_chat(message: str) -> str:
-    """POST /llm/chat via gateway — text-only LLM for UI progress flow."""
+    """POST /llm/chat via gateway - text-only LLM for UI progress flow."""
     resp = _client.post(
         f"{GATEWAY_URL}/llm/chat",
         json={"message": message},

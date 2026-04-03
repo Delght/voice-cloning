@@ -1,4 +1,4 @@
-"""LLM Microservice — connector to Anything-LLM workspace chat API.
+"""LLM Microservice: connector to Anything-LLM workspace chat API.
 
 Run:
     uvicorn services.llm.app:app --port 8004
@@ -35,7 +35,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Voice — LLM Service",
+    title="Voice - LLM Service",
     description="HTTP connector to Anything-LLM workspace chat API",
     version="0.1.0",
     lifespan=lifespan,
@@ -60,13 +60,10 @@ async def chat(req: ChatRequest):
     if not req.message.strip():
         return JSONResponse(status_code=400, content={"error": "Empty message"})
 
-    log.info("LLM ← '%s'", req.message[:100])
-
     try:
         response_text = await engine.chat(req.message)
     except RuntimeError as e:
         log.error("LLM error: %s", e)
         return JSONResponse(status_code=503, content={"error": "LLM unavailable", "detail": str(e)})
 
-    log.info("LLM → '%s'", response_text[:100])
     return ChatResponse(text=response_text)

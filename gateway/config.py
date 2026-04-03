@@ -1,4 +1,4 @@
-"""Gateway configuration — service URLs and timeouts.
+"""Gateway configuration: service URLs and timeouts.
 
 All values can be overridden via environment variables.
 """
@@ -10,7 +10,7 @@ TTS_URL = os.environ.get("TTS_URL", "http://localhost:8002")
 RVC_URL = os.environ.get("RVC_URL", "http://localhost:8003")
 LLM_URL = os.environ.get("LLM_URL", "http://localhost:8004")
 
-# httpx timeout in seconds — ML inference can be slow
+# httpx timeout in seconds - ML inference can be slow
 try:
     REQUEST_TIMEOUT = float(os.environ.get("GATEWAY_TIMEOUT", "300"))
 except ValueError:

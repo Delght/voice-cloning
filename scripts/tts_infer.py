@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""tts_infer.py — Phase 2: Text-to-Speech Inference
+"""tts_infer.py: Text-to-Speech Inference
 
 Generates speech from text using fish-speech, cloning the voice
 from a short reference audio file (zero-shot, no training needed).
@@ -43,7 +43,7 @@ MAX_TOKENS = 2048
 
 
 def get_device() -> str:
-    """Detect best available device — never hardcode."""
+    """Detect best available device - never hardcode."""
     return (
         "cuda"
         if torch.cuda.is_available()
@@ -149,7 +149,7 @@ def synthesize(
         return
 
     if not audio_chunks:
-        log.error("No audio generated — check input text or reference audio.")
+        log.error("No audio generated - check input text or reference audio.")
         return
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -170,7 +170,7 @@ def main() -> None:
     parser.add_argument(
         "--ref-text",
         default="",
-        help="Transcript of the reference audio — critical for cloning quality",
+        help="Transcript of the reference audio - critical for cloning quality",
     )
     parser.add_argument("--output", default="data/output.wav", help="Output WAV file")
 
@@ -205,10 +205,7 @@ def main() -> None:
         return
 
     if not MODEL_DIR.exists():
-        log.error(
-            f"Model weights not found: {MODEL_DIR}. "
-            "Run Bước 2 in docs/02_phase_2_tts_and_cloning/setup.md"
-        )
+        log.error("Missing fish-speech dependency. Check documentation for setup instructions.")
         return
 
     if not args.ref_text:

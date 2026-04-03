@@ -1,4 +1,4 @@
-"""LLM Engine — HTTP connector to Anything-LLM.
+"""LLM Engine: HTTP connector to Anything-LLM.
 
 Env vars:
     ANYTHINGLLM_BASE_URL       (default: http://localhost:3001)
