@@ -22,7 +22,7 @@ from faster_whisper import WhisperModel
 DEFAULT_SAMPLE_RATE = 24_000  # Hz - high-fidelity for voice cloning
 MIN_CHUNK_DURATION = 5.0  # seconds
 MAX_CHUNK_DURATION = 15.0  # seconds
-SILENCE_TOP_DB = 30  # dB below peak → treated as silence
+SILENCE_TOP_DB = 30  # dB below peak; treated as silence
 MAX_SILENCE_GAP = 0.5  # seconds - merge speech bursts closer than this
 
 logging.basicConfig(
@@ -138,7 +138,7 @@ def export_chunks(
 
         chunk_paths.append(out_path)
 
-    log.info(f"Exported {len(chunk_paths)} WAV chunks → {output_dir}/")
+    log.info(f"Exported {len(chunk_paths)} WAV chunks to {output_dir}/")
     return chunk_paths
 
 
@@ -170,7 +170,7 @@ def transcribe_chunks(
 
         transcripts.append(text)
         preview = text[:80] + ("..." if len(text) > 80 else "")
-        log.info(f"  → {preview}")
+        log.info(f"  {preview}")
 
     return transcripts
 
@@ -188,7 +188,7 @@ def save_transcript(
         writer.writeheader()
         writer.writerows(records)
 
-    log.info(f"Saved transcript → {output_path} ({len(records)} rows)")
+    log.info(f"Saved transcript to {output_path} ({len(records)} rows)")
 
 
 def main() -> None:

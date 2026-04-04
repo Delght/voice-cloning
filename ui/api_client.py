@@ -15,6 +15,7 @@ import httpx
 
 GATEWAY_URL = os.environ.get("GATEWAY_URL", "http://localhost:8000")
 TIMEOUT = float(os.environ.get("UI_TIMEOUT", "180"))
+TTS_TIMEOUT = float(os.environ.get("UI_TTS_TIMEOUT", "900"))
 
 _client = httpx.Client(timeout=TIMEOUT)
 
@@ -26,6 +27,13 @@ class APIError(Exception):
         super().__init__(detail)
         self.status_code = status_code
         self.detail = detail
+
+
+def _tts_timeout_exc() -> APIError:
+    return APIError(
+        504,
+        f"TTS timed out after {TTS_TIMEOUT:.0f}s. Set UI_TTS_TIMEOUT or shorten the text.",
+    )
 
 
 def _raise_on_error(resp: httpx.Response) -> None:
@@ -85,12 +93,16 @@ def health() -> dict:
 
 
 def chat(audio_path: str) -> str:
-    """POST /chat: full STT→LLM→TTS. For Makefile/scripts; UI uses stepwise calls for progress."""
+    """POST /chat: full STT->LLM->TTS. For Makefile/scripts; UI uses stepwise calls for progress."""
     wav_bytes, wav_name = _to_wav_bytes(audio_path)
-    resp = _client.post(
-        f"{GATEWAY_URL}/chat",
-        files={"audio": (wav_name, wav_bytes, "audio/wav")},
-    )
+    try:
+        resp = _client.post(
+            f"{GATEWAY_URL}/chat",
+            files={"audio": (wav_name, wav_bytes, "audio/wav")},
+            timeout=TTS_TIMEOUT,
+        )
+    except httpx.ReadTimeout as e:
+        raise _tts_timeout_exc() from e
     _raise_on_error(resp)
     return _save_wav(resp.content)
 
@@ -135,15 +147,19 @@ def tts_vieneu(
         "top_k": str(top_k),
         "max_chars": str(max_chars),
     }
-    if ref_audio_path:
-        wav_bytes, wav_name = _to_wav_bytes(ref_audio_path)
-        resp = _client.post(
-            f"{GATEWAY_URL}/tts/vieneu",
-            data=data,
-            files={"ref_audio": (wav_name, wav_bytes, "audio/wav")},
-        )
-    else:
-        resp = _client.post(f"{GATEWAY_URL}/tts/vieneu", data=data)
+    try:
+        if ref_audio_path:
+            wav_bytes, wav_name = _to_wav_bytes(ref_audio_path)
+            resp = _client.post(
+                f"{GATEWAY_URL}/tts/vieneu",
+                data=data,
+                files={"ref_audio": (wav_name, wav_bytes, "audio/wav")},
+                timeout=TTS_TIMEOUT,
+            )
+        else:
+            resp = _client.post(f"{GATEWAY_URL}/tts/vieneu", data=data, timeout=TTS_TIMEOUT)
+    except httpx.ReadTimeout as e:
+        raise _tts_timeout_exc() from e
 
     _raise_on_error(resp)
     return _save_wav(resp.content)
@@ -168,11 +184,15 @@ def tts_fish(
         "chunk_length": str(chunk_length),
     }
     wav_bytes, wav_name = _to_wav_bytes(ref_audio_path)
-    resp = _client.post(
-        f"{GATEWAY_URL}/tts/fish-speech",
-        data=data,
-        files={"ref_audio": (wav_name, wav_bytes, "audio/wav")},
-    )
+    try:
+        resp = _client.post(
+            f"{GATEWAY_URL}/tts/fish-speech",
+            data=data,
+            files={"ref_audio": (wav_name, wav_bytes, "audio/wav")},
+            timeout=TTS_TIMEOUT,
+        )
+    except httpx.ReadTimeout as e:
+        raise _tts_timeout_exc() from e
     _raise_on_error(resp)
     return _save_wav(resp.content)
 

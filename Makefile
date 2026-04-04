@@ -40,7 +40,7 @@ help:
 	@echo "Voice project — handy commands"
 	@echo ""
 	@echo "Audio preprocessing:"
-	@echo "  make convert_audio   - batch convert mp3/m4a → wav (audio/input → audio/output)"
+	@echo "  make convert_audio   - batch convert mp3/m4a -> wav (audio/input -> audio/output)"
 	@echo "  make convert_audio AUDIO_INPUT=my/dir AUDIO_OUTPUT=out/dir"
 	@echo ""
 	@echo "Code quality:"
@@ -52,20 +52,20 @@ help:
 	@echo ""
 	@echo "Run services:"
 	@echo "  make run_all          - start STT + TTS(fish-speech) + LLM + Gateway"
-	@echo "  make stop_all         - kill all services"
+	@echo "  make stop_all         - kill listeners on project ports (SIGKILL; OK if TTS is stuck)"
 	@echo "  make run_gateway"
 	@echo "  make run_stt"
 	@echo "  make run_tts          - TTS fish-speech (conda voice_fish; TTS_ENGINES=fish)"
 	@echo "  make run_tts_vieneu   - TTS VieNeu only (conda voice; TTS_ENGINES=vieneu)"
 	@echo "  make run_rvc"
-	@echo "  make run_llm          - LLM connector → Anything-LLM :3001"
+	@echo "  make run_llm          - LLM connector -> Anything-LLM :3001"
 	@echo "  make run_ui           - Gradio UI (connects to Gateway)"
 	@echo ""
 	@echo "Quick smoke tests (requires gateway + relevant service running):"
 	@echo "  make health"
 	@echo "  make transcribe_sample"
 	@echo "  make tts_vieneu_sample"
-	@echo "  make chat_sample      - full STT→LLM→TTS pipeline"
+	@echo "  make chat_sample      - full STT->LLM->TTS pipeline"
 	@echo ""
 	@echo "Notes:"
 	@echo "  - Override conda env: make CONDA_ENV=voice"
@@ -131,11 +131,20 @@ run_all:
 	@$(UVICORN) services.llm.app:app --host $(LLM_HOST) --port $(LLM_PORT) &
 	@$(UVICORN) gateway.app:app --host $(GATEWAY_HOST) --port $(GATEWAY_PORT)
 
+# LISTEN sockets only; SIGKILL so stuck torch inference cannot ignore SIGTERM.
 stop_all:
-	@for port in $(STT_PORT) $(TTS_PORT) $(RVC_PORT) $(LLM_PORT) $(GATEWAY_PORT) $(UI_PORT); do \
-		pid=$$(lsof -ti TCP:$$port 2>/dev/null); \
-		if [ -n "$$pid" ]; then kill $$pid && echo "Stopped :$$port"; fi; \
+	@echo "stop_all: SIGKILL listeners on :$(STT_PORT) :$(TTS_PORT) :$(RVC_PORT) :$(LLM_PORT) :$(GATEWAY_PORT) :$(UI_PORT)"
+	@for round in 1 2; do \
+		for port in $(STT_PORT) $(TTS_PORT) $(RVC_PORT) $(LLM_PORT) $(GATEWAY_PORT) $(UI_PORT); do \
+			pids=$$(lsof -nP -iTCP:$$port -sTCP:LISTEN -t 2>/dev/null); \
+			if [ -n "$$pids" ]; then \
+				kill -9 $$pids 2>/dev/null || true; \
+				echo "  killed :$$port pids=$$(echo $$pids | tr '\n' ' ')"; \
+			fi; \
+		done; \
+		[ $$round -eq 1 ] && sleep 1; \
 	done
+	@echo "stop_all: done."
 
 # ------------------------------------------------------------
 # Smoke tests (curl)

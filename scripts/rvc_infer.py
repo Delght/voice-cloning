@@ -68,7 +68,7 @@ def convert(
             clean_strength=clean_strength,
             export_format=export_format,
         )
-        log.info(f"Saved → {output_path}")
+        log.info(f"Saved to {output_path}")
 
     except RuntimeError as e:
         log.error(f"Voice conversion failed (OOM or model error): {e}")

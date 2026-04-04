@@ -59,7 +59,7 @@ services:
     env_file: .env
     restart: unless-stopped
     # Anything-LLM runs outside this stack (native or its own Docker container).
-    # host.docker.internal → resolves to the host machine from inside a container.
+    # host.docker.internal -> resolves to the host machine from inside a container.
     extra_hosts:
       - "host.docker.internal:host-gateway"
     healthcheck:

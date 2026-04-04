@@ -36,7 +36,7 @@ DECODER_CKPT = MODEL_DIR / "firefly-gan-vq-fsq-8x1024-21hz-generator.pth"
 DECODER_CONFIG = "firefly_gan_vq"
 
 # fish-speech decoder runs at 21 tokens/sec.
-# ~150 words/min in English = 2.5 words/sec → ~8 tokens per word.
+# ~150 words/min in English = 2.5 words/sec -> ~8 tokens per word.
 TOKENS_PER_WORD = 10
 MIN_TOKENS = 200
 MAX_TOKENS = 2048
@@ -156,7 +156,7 @@ def synthesize(
     full_audio = np.concatenate(audio_chunks)
     sf.write(str(output_path), full_audio, sample_rate)
     duration = len(full_audio) / sample_rate
-    log.info(f"Saved → {output_path} ({duration:.1f}s @ {sample_rate}Hz)")
+    log.info(f"Saved to {output_path} ({duration:.1f}s @ {sample_rate}Hz)")
 
 
 def main() -> None:

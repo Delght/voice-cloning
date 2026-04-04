@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import re
 
 import gradio as gr
 
@@ -17,6 +18,29 @@ VOICE_CHAT_FISH_REF_AUDIO = os.environ.get("VOICE_CHAT_FISH_REF_AUDIO", "").stri
 VOICE_CHAT_FISH_REF_TEXT = os.environ.get("VOICE_CHAT_FISH_REF_TEXT", "").strip()
 
 
+def _markdown_to_plain_for_tts(text: str) -> str:
+    """Strip common Markdown so TTS does not read asterisks and heading hashes."""
+    if not (text or "").strip():
+        return ""
+    t = text
+    t = re.sub(r"```[\s\S]*?```", " ", t)
+    t = re.sub(r"`([^`]+)`", r"\1", t)
+    t = re.sub(r"^#{1,6}\s*", "", t, flags=re.MULTILINE)
+    t = re.sub(r"\[([^\]]*)\]\([^)]*\)", r"\1", t)
+    for _ in range(8):
+        nt = re.sub(r"\*\*([^*]+)\*\*", r"\1", t)
+        if nt == t:
+            break
+        t = nt
+    t = re.sub(r"(?m)^\s*[*-]\s+", "", t)
+    t = re.sub(r"(?m)^\s*\d+\.\s+", "", t)
+    t = re.sub(r"(?<!\*)\*(?!\*)([^*\n]+?)(?<!\*)\*(?!\*)", r"\1", t)
+    t = re.sub(r"(?m)^\s*([*_-])\s*\1\s*\1+\s*$", "", t)
+    t = re.sub(r"[ \t]+\n", "\n", t)
+    t = re.sub(r"\n{3,}", "\n\n", t)
+    return t.strip()
+
+
 def _resolve_fish_ref_path(uploaded_ref: str | None) -> str | None:
     if uploaded_ref and os.path.isfile(uploaded_ref):
         return uploaded_ref
@@ -27,6 +51,29 @@ def _resolve_fish_ref_path(uploaded_ref: str | None) -> str | None:
     return None
 
 
+def _synthesize_voice_chat_reply(
+    ai_text: str,
+    engine_choice: str,
+    fish_ref_audio: str | None,
+    fish_ref_text: str,
+) -> str:
+    """Run TTS for Voice Chat; returns path to WAV. Raises APIError or ValueError."""
+    if "Fish" in engine_choice:
+        ref_path = _resolve_fish_ref_path(fish_ref_audio)
+        if not ref_path:
+            raise ValueError(
+                "No fish-speech reference WAV (upload in the accordion, restore "
+                "audio/output/morgan_freeman.wav, or set VOICE_CHAT_FISH_REF_AUDIO)."
+            )
+        ref_txt = (fish_ref_text or "").strip() or VOICE_CHAT_FISH_REF_TEXT
+        return api_client.tts_fish(
+            text=ai_text,
+            ref_audio_path=ref_path,
+            ref_text=ref_txt,
+        )
+    return api_client.tts_vieneu(text=ai_text)
+
+
 def on_chat(
     audio_path: str | None,
     engine_choice: str,
@@ -34,58 +81,51 @@ def on_chat(
     fish_ref_text: str,
 ):
     if audio_path is None:
-        yield "Error: record or upload an audio file first.", "", "", None
+        yield "Error: record or upload an audio file first.", "", "", "", None
         return
 
-    yield "Transcribing...", "", "", None
+    yield "Transcribing...", "", "", "", None
     try:
         result = api_client.transcribe(audio_path)
     except api_client.APIError as e:
-        yield f"Error at STT: {e.detail}", "", "", None
+        yield f"Error at STT: {e.detail}", "", "", "", None
         return
 
     user_text = result.get("text", "").strip()
     if not user_text:
-        yield "Error: could not transcribe audio. Try speaking more clearly.", "", "", None
+        yield "Error: could not transcribe audio. Try speaking more clearly.", "", "", "", None
         return
 
-    yield "Thinking...", user_text, "", None
+    yield "Thinking...", user_text, "", "", None
     try:
         ai_text = api_client.llm_chat(user_text)
     except api_client.APIError as e:
-        yield f"Error at LLM: {e.detail}", user_text, "", None
+        yield f"Error at LLM: {e.detail}", user_text, "", "", None
         return
 
     if not ai_text.strip():
-        yield "Error: AI returned an empty response.", user_text, "", None
+        yield "Error: AI returned an empty response.", user_text, "", "", None
         return
 
-    yield f"Generating speech ({engine_choice})...", user_text, ai_text, None
+    yield "Done.", user_text, ai_text, ai_text, None
+
+
+def on_chat_speak(
+    ai_raw_markdown: str,
+    engine_choice: str,
+    fish_ref_audio: str | None,
+    fish_ref_text: str,
+):
+    plain = _markdown_to_plain_for_tts(ai_raw_markdown)
+    if not plain.strip():
+        raise gr.Error("No AI reply yet. Send a voice message first, then click 🔊.")
+
     try:
-        if "Fish" in engine_choice:
-            ref_path = _resolve_fish_ref_path(fish_ref_audio)
-            if not ref_path:
-                yield (
-                    "Error: no fish-speech reference WAV (upload below, restore "
-                    "audio/output/morgan_freeman.wav, or set VOICE_CHAT_FISH_REF_AUDIO).",
-                    user_text,
-                    ai_text,
-                    None,
-                )
-                return
-            ref_txt = (fish_ref_text or "").strip() or VOICE_CHAT_FISH_REF_TEXT
-            audio_out = api_client.tts_fish(
-                text=ai_text,
-                ref_audio_path=ref_path,
-                ref_text=ref_txt,
-            )
-        else:
-            audio_out = api_client.tts_vieneu(text=ai_text)
+        return _synthesize_voice_chat_reply(plain, engine_choice, fish_ref_audio, fish_ref_text)
+    except ValueError as e:
+        raise gr.Error(str(e)) from e
     except api_client.APIError as e:
-        yield f"Error at TTS: {e.detail}", user_text, ai_text, None
-        return
-
-    yield "", user_text, ai_text, audio_out
+        raise gr.Error(str(e.detail)) from e
 
 
 def on_tts(
@@ -259,11 +299,17 @@ def build_app() -> gr.Blocks:
                             lines=2,
                             interactive=False,
                         )
-                        chat_ai_text = gr.Textbox(
-                            label="AI response",
-                            lines=3,
-                            interactive=False,
-                        )
+                        with gr.Row(equal_height=True):
+                            with gr.Column(scale=5, min_width=120):
+                                gr.Markdown("**AI response**")
+                            with gr.Column(scale=0, min_width=56):
+                                chat_speak_btn = gr.Button(
+                                    "🔊",
+                                    variant="secondary",
+                                    min_width=44,
+                                )
+                        chat_ai_markdown = gr.Markdown(value="")
+                        chat_ai_raw_state = gr.State("")
                         chat_audio_out = gr.Audio(
                             type="filepath",
                             label="AI voice",
@@ -283,7 +329,23 @@ def build_app() -> gr.Blocks:
                         chat_fish_ref_audio,
                         chat_fish_ref_text,
                     ],
-                    outputs=[chat_status, chat_user_text, chat_ai_text, chat_audio_out],
+                    outputs=[
+                        chat_status,
+                        chat_user_text,
+                        chat_ai_markdown,
+                        chat_ai_raw_state,
+                        chat_audio_out,
+                    ],
+                )
+                chat_speak_btn.click(
+                    on_chat_speak,
+                    inputs=[
+                        chat_ai_raw_state,
+                        chat_tts_engine,
+                        chat_fish_ref_audio,
+                        chat_fish_ref_text,
+                    ],
+                    outputs=[chat_audio_out],
                 )
 
             with gr.TabItem("Text-to-Speech"):

@@ -105,7 +105,7 @@ async def _proxy(request: Request, upstream_url: str) -> Response:
 async def chat(
     audio: UploadFile = File(..., description="User voice audio (wav, mp3, flac, etc.)"),
 ):
-    """Voice conversation pipeline: audio → STT → LLM → TTS → audio."""
+    """Voice conversation pipeline: audio -> STT -> LLM -> TTS -> audio."""
     audio_bytes = await audio.read()
     if not audio_bytes:
         return JSONResponse(status_code=400, content={"error": "Empty audio file"})

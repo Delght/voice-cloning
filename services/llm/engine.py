@@ -45,7 +45,7 @@ class LLMEngine:
                 "Content-Type": "application/json",
             },
         )
-        log.info("LLM connector → %s/api/v1/workspace/%s/chat", self.base_url, self.workspace_slug)
+        log.info("LLM connector: %s/api/v1/workspace/%s/chat", self.base_url, self.workspace_slug)
 
     async def unload(self) -> None:
         if self._client:
@@ -81,8 +81,7 @@ class LLMEngine:
         if not text_response:
             raise RuntimeError("Anything-LLM returned empty textResponse.")
 
-        # Qwen3.5 thinking mode wraps reasoning in <think>...</think> before the answer.
-        # Strip it so TTS only receives the final spoken response.
+        # Some reasoning models emit <redacted_thinking>...</think>; strip before TTS/UI.
         text_response = re.sub(r"<think>.*?</think>", "", text_response, flags=re.DOTALL).strip()
         if not text_response:
             raise RuntimeError("LLM response was empty after stripping think block.")

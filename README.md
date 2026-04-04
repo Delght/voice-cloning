@@ -6,14 +6,13 @@ Zero shot voice cloning: Clone any voice from a 10 to 30s audio sample. No train
 
 ## Demo
 
+**AI assistant:** LLM is **Gemma**
+
 ![Demo UI](docs/images/demo.png)
 
+**Voice cloning:** (reference audio -> cloned speech).
+
 <video src="https://github.com/user-attachments/assets/350ab4ae-8efc-4d35-9ed3-310042c8ef68" controls width="100%"></video>
-
-
-
-
-
 
 ## Stack
 
@@ -22,7 +21,7 @@ Zero shot voice cloning: Clone any voice from a 10 to 30s audio sample. No train
 | STT | [SYSTRAN/faster-whisper](https://github.com/SYSTRAN/faster-whisper) |
 | TTS | [fishaudio/fish-speech](https://github.com/fishaudio/fish-speech) + [pnnbao97/VieNeu-TTS](https://github.com/pnnbao97/VieNeu-TTS) |
 | Voice Conversion | [IAHispano/Applio](https://github.com/IAHispano/Applio) (RVC) |
-| LLM | [QwenLM/Qwen3.5](https://github.com/QwenLM/Qwen3.5) via [Mintplex-Labs/anything-llm](https://github.com/Mintplex-Labs/anything-llm) |
+| LLM | [Google Gemma](https://ai.google.dev/gemma) (e.g. Gemma 4 via [Ollama](https://ollama.com)) + [Anything-LLM](https://github.com/Mintplex-Labs/anything-llm) |
 | Backend | [FastAPI](https://github.com/fastapi/fastapi) + [Pydantic](https://github.com/pydantic/pydantic) |
 | Frontend | [Gradio](https://github.com/gradio-app/gradio) |
 
@@ -51,17 +50,17 @@ Zero shot voice cloning: Clone any voice from a 10 to 30s audio sample. No train
 
 | Flow | Gateway | Notes |
 | --- | --- | --- |
-| Transcribe | `/transcribe` | `Audio → STT → text` |
-| Voice cloning | `/tts/vieneu`, `/tts/fish-speech` | `Text + ref audio + ref_text → TTS → WAV` |
-| Voice conversion | `/convert-voice` | `WAV + RVC .pth → RVC → converted WAV` |
-| Conversation (one shot) | `/chat` | `Mic → STT → LLM → TTS → WAV`. E.g. `make chat_sample`, `api_client.chat()` |
-| LLM only | `/llm/chat` | JSON `{"message": "..."}` → assistant text (proxied to `:8004`) |
+| Transcribe | `/transcribe` | `Audio -> STT -> text` |
+| Voice cloning | `/tts/vieneu`, `/tts/fish-speech` | `Text + ref audio + ref_text -> TTS -> WAV` |
+| Voice conversion | `/convert-voice` | `WAV + RVC .pth -> RVC -> converted WAV` |
+| Conversation (one shot) | `/chat` | `Mic -> STT -> LLM -> TTS -> WAV`. E.g. `make chat_sample`, `api_client.chat()` |
+| LLM only | `/llm/chat` | JSON `{"message": "..."}` -> assistant text (proxied to `:8004`) |
 | Voice Chat (Gradio) | `/transcribe` + `/llm/chat` + `/tts/*` | Same stages as `/chat`, split for progress UI; fish ref defaults to tracked `audio/output/morgan_freeman.wav`, or upload / env override |
 
 ## Requirements
 
 - [Miniforge](https://github.com/conda-forge/miniforge) + `ffmpeg`
-- [Ollama](https://ollama.com) + [Anything-LLM](https://anythingllm.com) (for the LLM connector)
+- [Ollama](https://ollama.com) (pull your model, e.g. `ollama pull gemma4`) + [Anything-LLM](https://anythingllm.com) (workspace uses that model)
 
 ## Usage
 
@@ -105,7 +104,7 @@ curl -X POST http://localhost:8000/tts/vieneu \
 ### Scripts
 
 ```bash
-# Convert mp3/m4a → wav (batch, before using as reference audio)
+# Convert mp3/m4a -> wav (batch, before using as reference audio)
 python scripts/convert_audio.py --input audio/input --output audio/output
 # or via make:
 make convert_audio
@@ -127,7 +126,7 @@ make check    # ruff format + lint
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/singswap/voice-cloning/blob/main/Voice_Colab.ipynb)
 
-To run this project on Google Colab with GPU support, click the badge above. The notebook installs **fish-speech** (clone + Hugging Face weights), starts TTS with `TTS_ENGINES=fish`, then Gradio. Run cells in order.
+To run on Google Colab, open the notebook from the badge. It matches **local behavior**: cell 2 starts the same stack as **`make run_all`**, cell 3 the UI like **`make run_ui`** (with `GRADIO_SHARE` for a public Gradio link). Colab uses one pip env instead of conda. Run cells in order after choosing a GPU runtime.
 
 ## Docker
 

@@ -75,7 +75,7 @@ def synthesize(
 
     sample_rate = 24000  # VieNeu-TTS outputs 24kHz
     duration = len(audio) / sample_rate
-    log.info(f"Saved → {output_path} ({duration:.1f}s @ {sample_rate}Hz)")
+    log.info(f"Saved to {output_path} ({duration:.1f}s @ {sample_rate}Hz)")
 
 
 def main() -> None:

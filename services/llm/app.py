@@ -4,8 +4,8 @@ Run:
     uvicorn services.llm.app:app --port 8004
 
 Endpoints:
-    POST /chat   {"message": "..."} → {"text": "..."}
-    GET  /health → connectivity status to Anything-LLM
+    POST /chat   {"message": "..."} -> {"text": "..."}
+    GET  /health -> connectivity status to Anything-LLM
 """
 
 import logging

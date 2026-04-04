@@ -37,7 +37,7 @@ def convert_audio(input_dir: Path, output_dir: Path) -> None:
         ]
         try:
             subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
-            print(f"  {f.name} → {out.name}")
+            print(f"  {f.name} to {out.name}")
         except subprocess.CalledProcessError:
             print(f"  ERROR: {f.name}")
             errors.append(f.name)
