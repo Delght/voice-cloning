@@ -1,4 +1,4 @@
-# Voice Cloning & AI Assistant
+# Fiona Anne
 
 Self-hosted voice cloning and conversational AI. Zero external APIs.
 
@@ -132,7 +132,7 @@ make check    # ruff format + lint
 
 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/singswap/voice-cloning/blob/main/Voice_Colab.ipynb)
 
-To run on Google Colab, open the notebook from the badge. It matches **local behavior**: cell 2 starts the same stack as **`make run_all`**, cell 3 the UI like **`make run_ui`** (with `GRADIO_SHARE` for a public Gradio link). Colab uses one pip env instead of conda. Run cells in order after choosing a GPU runtime.
+**Colab:** open the badge notebook, enable a GPU runtime, run cells top to bottom. Same idea as `make run_all` (cell 2) then `make run_ui` (cell 3; set `GRADIO_SHARE` for a public Gradio URL). One pip env, not conda.
 
 ## Docker
 

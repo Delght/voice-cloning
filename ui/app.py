@@ -11,7 +11,25 @@ from voice_common.fish_ref import default_fish_ref_path
 
 from . import api_client
 
-TITLE = "Voice Cloning & AI Assistant"
+TITLE = "Fiona Anne"
+
+ENGINE_VIENEU = "VieNeu-TTS"
+ENGINE_FISH = "fish-speech"
+ENGINE_CHOICES: tuple[str, ...] = (ENGINE_VIENEU, ENGINE_FISH)
+_DEFAULT_ENGINE = ENGINE_FISH
+
+_THEME_BODY_BG_DARK = "#0a1f24"
+_THEME_SURFACE_BG_DARK = "#0e2429"
+_HEADING_ACCENT = "#22d3ee"
+
+_APP_THEME = gr.themes.Soft(
+    primary_hue=gr.themes.colors.cyan,
+    secondary_hue=gr.themes.colors.teal,
+    neutral_hue=gr.themes.colors.slate,
+).set(
+    body_background_fill_dark=_THEME_BODY_BG_DARK,
+    background_fill_primary_dark=_THEME_SURFACE_BG_DARK,
+)
 
 _DEFAULT_FISH_REF_PATH = str(default_fish_ref_path())
 VOICE_CHAT_FISH_REF_AUDIO = os.environ.get("VOICE_CHAT_FISH_REF_AUDIO", "").strip()
@@ -50,6 +68,14 @@ def _resolve_fish_ref_path(uploaded_ref: str | None) -> str | None:
     return None
 
 
+def _voice_chat_ai_heading_html() -> str:
+    return (
+        f'<p style="margin:0 0 0.35rem 0;font-weight:600;'
+        f'font-size:1.05rem;color:{_HEADING_ACCENT}">'
+        "AI response</p>"
+    )
+
+
 def _synthesize_voice_chat_reply(
     ai_text: str,
     fish_ref_audio: str | None,
@@ -58,8 +84,8 @@ def _synthesize_voice_chat_reply(
     ref_path = _resolve_fish_ref_path(fish_ref_audio)
     if not ref_path:
         raise ValueError(
-            "No fish-speech reference (upload in the accordion, add "
-            "audio/reference/phuong_anh.wav, or set VOICE_CHAT_FISH_REF_AUDIO)."
+            "No fish-speech reference: upload in the accordion, restore the bundled "
+            "default ref, or set VOICE_CHAT_FISH_REF_AUDIO."
         )
     ref_txt = (fish_ref_text or "").strip() or VOICE_CHAT_FISH_REF_TEXT
     return api_client.tts_fish(
@@ -111,7 +137,7 @@ def on_chat_speak(
 ):
     plain = _markdown_to_plain_for_tts(ai_raw_markdown)
     if not plain.strip():
-        raise gr.Error("No AI reply yet. Send a voice message first, then click 🔊.")
+        raise gr.Error("No AI reply yet. Send a voice message first, then click Speak.")
 
     try:
         return _synthesize_voice_chat_reply(plain, fish_ref_audio, fish_ref_text)
@@ -137,7 +163,7 @@ def on_tts(
         raise gr.Error("Enter some text to synthesize.")
 
     try:
-        if engine == "VieNeu-TTS":
+        if engine == ENGINE_VIENEU:
             return api_client.tts_vieneu(
                 text=text,
                 ref_audio_path=ref_audio,
@@ -148,7 +174,7 @@ def on_tts(
             )
 
         if ref_audio is None:
-            raise gr.Error("fish-speech requires a reference audio file.")
+            raise gr.Error(f"{ENGINE_FISH} requires a reference audio file.")
         return api_client.tts_fish(
             text=text,
             ref_audio_path=ref_audio,
@@ -179,7 +205,7 @@ def on_ref_audio_upload(audio_path: str | None):
 
 
 def on_engine_change(engine: str):
-    is_fish = engine == "fish-speech"
+    is_fish = engine == ENGINE_FISH
     ref_label = (
         "Reference audio (required)" if is_fish else "Reference audio (optional, for voice cloning)"
     )
@@ -255,263 +281,263 @@ def on_health_check():
         return f"**Error:** {e}"
 
 
+def _add_voice_chat_tab() -> None:
+    with gr.TabItem("Voice Chat"):
+        chat_status = gr.Markdown(value="")
+        with gr.Column():
+            chat_audio_in = gr.Audio(
+                sources=["microphone", "upload"],
+                type="filepath",
+                label="Your question",
+            )
+            with gr.Accordion("AI response voice reference, optional override", open=False):
+                chat_fish_ref_audio = gr.Audio(
+                    sources=["upload"],
+                    type="filepath",
+                    label="Reference voice (optional)",
+                )
+                chat_fish_ref_text = gr.Textbox(
+                    label="Transcript (optional, auto-fill)",
+                    lines=2,
+                    placeholder="What the reference clip says - edit if STT is wrong",
+                )
+            chat_btn = gr.Button("Send", variant="primary", size="md")
+            chat_user_text = gr.Textbox(
+                label="You said",
+                lines=2,
+                interactive=False,
+            )
+            gr.HTML(_voice_chat_ai_heading_html())
+            chat_ai_markdown = gr.Markdown(value="")
+            chat_ai_raw_state = gr.State("")
+            chat_speak_btn = gr.Button(
+                "Speak",
+                variant="secondary",
+                size="sm",
+            )
+            chat_audio_out = gr.Audio(
+                type="filepath",
+                label="AI voice",
+                interactive=False,
+                autoplay=True,
+            )
+        chat_fish_ref_audio.change(
+            fn=on_ref_audio_upload,
+            inputs=[chat_fish_ref_audio],
+            outputs=[chat_fish_ref_text],
+        )
+        chat_btn.click(
+            on_chat,
+            inputs=[
+                chat_audio_in,
+                chat_fish_ref_audio,
+                chat_fish_ref_text,
+            ],
+            outputs=[
+                chat_status,
+                chat_user_text,
+                chat_ai_markdown,
+                chat_ai_raw_state,
+                chat_audio_out,
+            ],
+        )
+        chat_speak_btn.click(
+            on_chat_speak,
+            inputs=[
+                chat_ai_raw_state,
+                chat_fish_ref_audio,
+                chat_fish_ref_text,
+            ],
+            outputs=[chat_audio_out],
+        )
+
+
+def _add_voice_cloning_tab() -> None:
+    with gr.TabItem("Voice Cloning"):
+        with gr.Column():
+            tts_engine = gr.Dropdown(
+                choices=list(ENGINE_CHOICES),
+                value=_DEFAULT_ENGINE,
+                label="Engine",
+            )
+            with gr.Accordion("Parameters", open=False):
+                tts_temp = gr.Slider(0.1, 1.5, value=0.7, step=0.1, label="Temperature")
+                tts_top_k = gr.Slider(1, 100, value=50, step=1, label="Top-K")
+                tts_max_chars = gr.Slider(
+                    64,
+                    512,
+                    value=256,
+                    step=16,
+                    label="Max chars per chunk (VieNeu)",
+                )
+                tts_top_p = gr.Slider(0.1, 1.0, value=0.7, step=0.05, label="Top-P", visible=False)
+                tts_rep = gr.Slider(
+                    1.0,
+                    2.0,
+                    value=1.2,
+                    step=0.1,
+                    label="Repetition penalty",
+                    visible=False,
+                )
+                tts_chunk = gr.Slider(
+                    50, 500, value=200, step=50, label="Chunk length", visible=False
+                )
+            with gr.Group():
+                tts_ref_audio = gr.Audio(
+                    sources=["upload"],
+                    type="filepath",
+                    label="Reference audio (required)",
+                )
+                tts_ref_text = gr.Textbox(
+                    label="Transcript (auto-filled)",
+                    placeholder="Auto-filled after upload; edit if wrong.",
+                    lines=3,
+                    visible=True,
+                )
+            tts_text = gr.Textbox(
+                label="Text to speak",
+                placeholder="What the clone should say...",
+                lines=4,
+            )
+            tts_btn = gr.Button("Generate", variant="primary", size="md")
+            tts_audio_out = gr.Audio(
+                type="filepath",
+                label="Output audio",
+                interactive=False,
+            )
+
+        tts_ref_audio.change(
+            fn=on_ref_audio_upload,
+            inputs=[tts_ref_audio],
+            outputs=[tts_ref_text],
+        )
+        tts_engine.change(
+            fn=on_engine_change,
+            inputs=[tts_engine],
+            outputs=[
+                tts_ref_audio,
+                tts_ref_text,
+                tts_temp,
+                tts_top_k,
+                tts_max_chars,
+                tts_top_p,
+                tts_rep,
+                tts_chunk,
+            ],
+        )
+        tts_btn.click(
+            fn=on_tts,
+            inputs=[
+                tts_text,
+                tts_engine,
+                tts_ref_audio,
+                tts_ref_text,
+                tts_temp,
+                tts_top_k,
+                tts_max_chars,
+                tts_top_p,
+                tts_rep,
+                tts_chunk,
+            ],
+            outputs=[tts_audio_out],
+        )
+
+
+def _add_voice_conversion_tab() -> None:
+    with gr.TabItem("Voice Conversion"):
+        with gr.Row():
+            with gr.Column():
+                rvc_audio_in = gr.Audio(sources=["upload"], type="filepath", label="Input audio")
+                rvc_model = gr.Textbox(
+                    label="Voice model name",
+                    placeholder="e.g. target (looks for models/rvc/target.pth)",
+                )
+                with gr.Accordion("Parameters", open=False):
+                    rvc_pitch = gr.Slider(-24, 24, value=0, step=1, label="Pitch (semitones)")
+                    rvc_f0 = gr.Dropdown(
+                        choices=["rmvpe", "crepe", "fcpe"],
+                        value="rmvpe",
+                        label="F0 method",
+                    )
+                    rvc_index = gr.Slider(0.0, 1.0, value=0.75, step=0.05, label="Index rate")
+                    rvc_protect = gr.Slider(0.0, 1.0, value=0.5, step=0.05, label="Protect")
+                    rvc_clean = gr.Checkbox(label="Clean audio (noise reduction)", value=False)
+                rvc_btn = gr.Button("Convert", variant="primary")
+            with gr.Column():
+                rvc_audio_out = gr.Audio(
+                    type="filepath",
+                    label="Converted audio",
+                    interactive=False,
+                )
+
+        rvc_btn.click(
+            fn=on_convert,
+            inputs=[
+                rvc_audio_in,
+                rvc_model,
+                rvc_pitch,
+                rvc_f0,
+                rvc_index,
+                rvc_protect,
+                rvc_clean,
+            ],
+            outputs=[rvc_audio_out],
+        )
+
+
+def _add_transcribe_tab() -> None:
+    with gr.TabItem("Transcribe"):
+        with gr.Row():
+            with gr.Column():
+                stt_audio_in = gr.Audio(
+                    sources=["upload", "microphone"],
+                    type="filepath",
+                    label="Audio input",
+                )
+                stt_btn = gr.Button("Transcribe", variant="primary")
+            with gr.Column():
+                stt_text_out = gr.Textbox(label="Transcript", lines=3, interactive=False)
+                stt_info = gr.Markdown(label="Info")
+                stt_segments = gr.Textbox(
+                    label="Segments (with timestamps)",
+                    lines=8,
+                    interactive=False,
+                )
+        stt_btn.click(
+            on_transcribe,
+            inputs=[stt_audio_in],
+            outputs=[stt_text_out, stt_info, stt_segments],
+        )
+
+
+def _add_system_status_section() -> None:
+    with gr.Accordion("System Status", open=False):
+        health_btn = gr.Button("Check services", size="sm")
+        health_output = gr.Markdown()
+        health_btn.click(fn=on_health_check, inputs=[], outputs=[health_output])
+
+
 def build_app() -> gr.Blocks:
-    with gr.Blocks(title=TITLE, theme=gr.themes.Soft()) as app:
+    with gr.Blocks(title=TITLE) as app:
         gr.Markdown(f"# {TITLE}")
-
         with gr.Tabs():
-            with gr.TabItem("Voice Chat"):
-                chat_status = gr.Markdown(value="")
-                with gr.Row():
-                    with gr.Column():
-                        chat_audio_in = gr.Audio(
-                            sources=["microphone", "upload"],
-                            type="filepath",
-                            label="Your question",
-                        )
-                        with gr.Accordion(
-                            "AI response voice reference, optional override", open=False
-                        ):
-                            chat_fish_ref_audio = gr.Audio(
-                                sources=["upload"],
-                                type="filepath",
-                                label="Reference voice (optional)",
-                            )
-                            chat_fish_ref_text = gr.Textbox(
-                                label="Reference transcript (optional, auto-filled if you upload)",
-                                lines=2,
-                                placeholder="What the reference clip says - edit if STT is wrong",
-                            )
-                        chat_btn = gr.Button("Send", variant="primary")
-                    with gr.Column():
-                        chat_user_text = gr.Textbox(
-                            label="You said",
-                            lines=2,
-                            interactive=False,
-                        )
-                        with gr.Row(equal_height=True):
-                            with gr.Column(scale=5, min_width=120):
-                                gr.Markdown("**AI response (Phương Anh voice)**")
-                            with gr.Column(scale=0, min_width=56):
-                                chat_speak_btn = gr.Button(
-                                    "🔊",
-                                    variant="secondary",
-                                    min_width=44,
-                                )
-                        chat_ai_markdown = gr.Markdown(value="")
-                        chat_ai_raw_state = gr.State("")
-                        chat_audio_out = gr.Audio(
-                            type="filepath",
-                            label="AI voice",
-                            interactive=False,
-                            autoplay=True,
-                        )
-                chat_fish_ref_audio.change(
-                    fn=on_ref_audio_upload,
-                    inputs=[chat_fish_ref_audio],
-                    outputs=[chat_fish_ref_text],
-                )
-                chat_btn.click(
-                    on_chat,
-                    inputs=[
-                        chat_audio_in,
-                        chat_fish_ref_audio,
-                        chat_fish_ref_text,
-                    ],
-                    outputs=[
-                        chat_status,
-                        chat_user_text,
-                        chat_ai_markdown,
-                        chat_ai_raw_state,
-                        chat_audio_out,
-                    ],
-                )
-                chat_speak_btn.click(
-                    on_chat_speak,
-                    inputs=[
-                        chat_ai_raw_state,
-                        chat_fish_ref_audio,
-                        chat_fish_ref_text,
-                    ],
-                    outputs=[chat_audio_out],
-                )
-
-            with gr.TabItem("Text-to-Speech"):
-                with gr.Row():
-                    with gr.Column():
-                        tts_text = gr.Textbox(
-                            label="Text",
-                            placeholder="Enter text to synthesize...",
-                            lines=3,
-                        )
-                        tts_engine = gr.Dropdown(
-                            choices=["VieNeu-TTS", "fish-speech"],
-                            value="fish-speech",
-                            label="Engine",
-                        )
-                        tts_ref_audio = gr.Audio(
-                            sources=["upload"],
-                            type="filepath",
-                            label="Reference audio (optional, for voice cloning)",
-                        )
-                        tts_ref_text = gr.Textbox(
-                            label="Reference text (auto-filled, editable)",
-                            placeholder=(
-                                "Auto-transcribed when you upload ref audio. "
-                                "Edit if STT got it wrong."
-                            ),
-                            lines=2,
-                            visible=True,
-                        )
-
-                        with gr.Accordion("Parameters", open=False):
-                            tts_temp = gr.Slider(0.1, 1.5, value=1.0, step=0.1, label="Temperature")
-                            tts_top_k = gr.Slider(1, 100, value=50, step=1, label="Top-K")
-                            tts_max_chars = gr.Slider(
-                                64,
-                                512,
-                                value=256,
-                                step=16,
-                                label="Max chars per chunk (VieNeu)",
-                            )
-                            tts_top_p = gr.Slider(
-                                0.1, 1.0, value=0.7, step=0.05, label="Top-P", visible=False
-                            )
-                            tts_rep = gr.Slider(
-                                1.0,
-                                2.0,
-                                value=1.2,
-                                step=0.1,
-                                label="Repetition penalty",
-                                visible=False,
-                            )
-                            tts_chunk = gr.Slider(
-                                50, 500, value=200, step=50, label="Chunk length", visible=False
-                            )
-
-                        tts_btn = gr.Button("Generate", variant="primary")
-                    with gr.Column():
-                        tts_audio_out = gr.Audio(
-                            type="filepath",
-                            label="Output audio",
-                            interactive=False,
-                        )
-
-                tts_ref_audio.change(
-                    fn=on_ref_audio_upload,
-                    inputs=[tts_ref_audio],
-                    outputs=[tts_ref_text],
-                )
-                tts_engine.change(
-                    fn=on_engine_change,
-                    inputs=[tts_engine],
-                    outputs=[
-                        tts_ref_audio,
-                        tts_ref_text,
-                        tts_temp,
-                        tts_top_k,
-                        tts_max_chars,
-                        tts_top_p,
-                        tts_rep,
-                        tts_chunk,
-                    ],
-                )
-                tts_btn.click(
-                    fn=on_tts,
-                    inputs=[
-                        tts_text,
-                        tts_engine,
-                        tts_ref_audio,
-                        tts_ref_text,
-                        tts_temp,
-                        tts_top_k,
-                        tts_max_chars,
-                        tts_top_p,
-                        tts_rep,
-                        tts_chunk,
-                    ],
-                    outputs=[tts_audio_out],
-                )
-
-            with gr.TabItem("Voice Conversion"):
-                with gr.Row():
-                    with gr.Column():
-                        rvc_audio_in = gr.Audio(
-                            sources=["upload"], type="filepath", label="Input audio"
-                        )
-                        rvc_model = gr.Textbox(
-                            label="Voice model name",
-                            placeholder="e.g. target (looks for models/rvc/target.pth)",
-                        )
-                        with gr.Accordion("Parameters", open=False):
-                            rvc_pitch = gr.Slider(
-                                -24, 24, value=0, step=1, label="Pitch (semitones)"
-                            )
-                            rvc_f0 = gr.Dropdown(
-                                choices=["rmvpe", "crepe", "fcpe"],
-                                value="rmvpe",
-                                label="F0 method",
-                            )
-                            rvc_index = gr.Slider(
-                                0.0, 1.0, value=0.75, step=0.05, label="Index rate"
-                            )
-                            rvc_protect = gr.Slider(0.0, 1.0, value=0.5, step=0.05, label="Protect")
-                            rvc_clean = gr.Checkbox(
-                                label="Clean audio (noise reduction)", value=False
-                            )
-                        rvc_btn = gr.Button("Convert", variant="primary")
-                    with gr.Column():
-                        rvc_audio_out = gr.Audio(
-                            type="filepath",
-                            label="Converted audio",
-                            interactive=False,
-                        )
-
-                rvc_btn.click(
-                    fn=on_convert,
-                    inputs=[
-                        rvc_audio_in,
-                        rvc_model,
-                        rvc_pitch,
-                        rvc_f0,
-                        rvc_index,
-                        rvc_protect,
-                        rvc_clean,
-                    ],
-                    outputs=[rvc_audio_out],
-                )
-
-            with gr.TabItem("Transcribe"):
-                with gr.Row():
-                    with gr.Column():
-                        stt_audio_in = gr.Audio(
-                            sources=["upload", "microphone"],
-                            type="filepath",
-                            label="Audio input",
-                        )
-                        stt_btn = gr.Button("Transcribe", variant="primary")
-                    with gr.Column():
-                        stt_text_out = gr.Textbox(label="Transcript", lines=3, interactive=False)
-                        stt_info = gr.Markdown(label="Info")
-                        stt_segments = gr.Textbox(
-                            label="Segments (with timestamps)",
-                            lines=8,
-                            interactive=False,
-                        )
-                stt_btn.click(
-                    on_transcribe,
-                    inputs=[stt_audio_in],
-                    outputs=[stt_text_out, stt_info, stt_segments],
-                )
-
-        with gr.Accordion("System Status", open=False):
-            health_btn = gr.Button("Check services", size="sm")
-            health_output = gr.Markdown()
-            health_btn.click(fn=on_health_check, inputs=[], outputs=[health_output])
-
+            _add_voice_chat_tab()
+            _add_voice_cloning_tab()
+            _add_voice_conversion_tab()
+            _add_transcribe_tab()
+        _add_system_status_section()
     return app
 
 
-if __name__ == "__main__":
+def main() -> None:
     share = os.environ.get("GRADIO_SHARE", "false").lower() == "true"
-    build_app().launch(server_name="0.0.0.0", server_port=7860, share=share)
+    build_app().launch(
+        server_name="0.0.0.0",
+        server_port=7860,
+        share=share,
+        theme=_APP_THEME,
+    )
+
+
+if __name__ == "__main__":
+    main()
