@@ -85,13 +85,13 @@ convert_audio:
 # Code quality
 # ------------------------------------------------------------
 fmt:
-	$(RUFF) format services/ gateway/ scripts/ ui/ voice_common/
+	$(RUFF) format services/ gateway/ scripts/ ui/ common/
 
 lint:
-	$(RUFF) check services/ gateway/ scripts/ ui/ voice_common/
+	$(RUFF) check services/ gateway/ scripts/ ui/ common/
 
 fix:
-	$(RUFF) check services/ gateway/ scripts/ ui/ voice_common/ --fix
+	$(RUFF) check services/ gateway/ scripts/ ui/ common/ --fix
 
 check: fmt fix
 

@@ -8,8 +8,8 @@ from pathlib import Path
 
 import httpx
 
-from voice_common.fish_ref import default_fish_ref_path
-from voice_common.reference_audio import load_reference_as_wav
+from common.fish_ref import default_fish_ref_path
+from common.reference_audio import load_reference_as_wav
 
 from .config import LLM_URL, STT_URL, TTS_URL
 

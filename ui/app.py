@@ -8,7 +8,7 @@ import re
 
 import gradio as gr
 
-from voice_common.fish_ref import default_fish_ref_path
+from common.fish_ref import default_fish_ref_path
 
 from . import api_client
 

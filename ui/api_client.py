@@ -12,7 +12,7 @@ from pathlib import Path
 
 import httpx
 
-from voice_common.reference_audio import load_reference_as_wav
+from common.reference_audio import load_reference_as_wav
 
 GATEWAY_URL = os.environ.get("GATEWAY_URL", "http://localhost:8000")
 TIMEOUT = float(os.environ.get("UI_TIMEOUT", "180"))

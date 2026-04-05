@@ -8,7 +8,7 @@ RUN pip install --no-cache-dir \
     httpx \
     python-dotenv
 
-COPY voice_common/ ./voice_common/
+COPY common/ ./common/
 COPY ui/ ./ui/
 
 EXPOSE 7860

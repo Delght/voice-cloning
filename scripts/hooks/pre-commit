@@ -7,10 +7,10 @@ set -euo pipefail
 CONDA_ENV="${CONDA_ENV:-voice}"
 
 echo "[pre-commit] ruff format..."
-conda run --no-capture-output -n "$CONDA_ENV" ruff format services/ gateway/ scripts/ ui/ voice_common/
+conda run --no-capture-output -n "$CONDA_ENV" ruff format services/ gateway/ scripts/ ui/ common/
 
 echo "[pre-commit] ruff check..."
-if ! conda run --no-capture-output -n "$CONDA_ENV" ruff check services/ gateway/ scripts/ ui/ voice_common/; then
+if ! conda run --no-capture-output -n "$CONDA_ENV" ruff check services/ gateway/ scripts/ ui/ common/; then
     echo ""
     echo "[pre-commit] Lint errors found. Run 'make fix' to auto-fix, then re-stage."
     exit 1

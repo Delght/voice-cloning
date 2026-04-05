@@ -13,7 +13,7 @@ RUN pip install --no-cache-dir \
     python-dotenv
 
 COPY gateway/ ./gateway/
-COPY voice_common/ ./voice_common/
+COPY common/ ./common/
 COPY services/__init__.py ./services/__init__.py
 
 EXPOSE 8000
