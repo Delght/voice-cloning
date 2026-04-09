@@ -4,11 +4,12 @@ Run:
     uvicorn gateway.app:app --port 8000
 
 Endpoints:
-    POST /chat              -> STT + LLM + fish TTS (orchestrator)
+    POST /chat              -> STT + LLM + TTS (orchestrator)
     POST /transcribe        -> STT :8001
     POST /tts/fish-speech   -> TTS :8002
     POST /tts/vieneu        -> TTS :8002
-    POST /convert-voice     -> RVC :8003
+    POST /tts/vbv           -> VBV :8005
+    POST /convert-voice     -> RVC :8003 (hybrid VBV->RVC or direct)
     POST /llm/chat          -> LLM :8004
     GET  /health            -> all services
     GET  /health/{service}  -> one service
@@ -18,11 +19,11 @@ import logging
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import FastAPI, File, Request, UploadFile
+from fastapi import FastAPI, File, Form, Request, UploadFile
 from fastapi.responses import JSONResponse, Response
 
 from .config import REQUEST_TIMEOUT, ROUTE_MAP, SERVICES
-from .orchestrator import PipelineError, run_chat_pipeline
+from .orchestrator import PipelineError, apply_rvc_conversion, run_chat_pipeline
 from .schemas import GatewayHealth, HealthStatus
 
 logging.basicConfig(
@@ -47,7 +48,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Voice - API Gateway",
-    description="Reverse proxy and orchestrator for STT, TTS, RVC, and LLM microservices",
+    description="Reverse proxy and orchestrator for STT, TTS, VBV, and LLM microservices",
     version="0.1.0",
     lifespan=lifespan,
 )
@@ -134,19 +135,76 @@ async def proxy_transcribe(request: Request):
     return await _proxy(request, ROUTE_MAP["/transcribe"])
 
 
-@app.post("/tts/fish-speech")
-async def proxy_tts_fish(request: Request):
-    return await _proxy(request, ROUTE_MAP["/tts/fish-speech"])
-
-
 @app.post("/tts/vieneu")
 async def proxy_tts_vieneu(request: Request):
     return await _proxy(request, ROUTE_MAP["/tts/vieneu"])
 
 
+@app.post("/tts/fish-speech")
+async def proxy_tts_fish(request: Request):
+    return await _proxy(request, ROUTE_MAP["/tts/fish-speech"])
+
+
+@app.post("/tts/vbv")
+async def proxy_tts_vbv(request: Request):
+    return await _proxy(request, ROUTE_MAP["/tts/vbv"])
+
+
 @app.post("/convert-voice")
-async def proxy_convert_voice(request: Request):
-    return await _proxy(request, ROUTE_MAP["/convert-voice"])
+async def convert_voice_endpoint(
+    audio: UploadFile = File(None, description="Input audio file to convert"),
+    text: str = Form(None, description="Text to synthesize before RVC (VBV)"),
+    voice_model: str = Form(..., description="Voice model name (e.g. 'target')"),
+    index_path: str = Form("", description="Path to .index file (optional)"),
+    pitch: int = Form(0),
+    f0_method: str = Form("rmvpe"),
+    index_rate: float = Form(0.75),
+    protect: float = Form(0.33),
+    clean_audio: bool = Form(False),
+):
+    """Voice conversion pipeline: audio -> RVC or text -> VBV -> RVC."""
+    if audio is not None:
+        audio_bytes = await audio.read()
+    elif text and text.strip():
+        try:
+            tts_resp = await _client.post(
+                ROUTE_MAP["/tts/vbv"], data={"text": text}, timeout=REQUEST_TIMEOUT
+            )
+            if tts_resp.status_code != 200:
+                return JSONResponse(
+                    status_code=tts_resp.status_code,
+                    content={"error": "VBV TTS failed", "detail": tts_resp.text},
+                )
+            audio_bytes = tts_resp.content
+        except Exception as e:
+            return JSONResponse(status_code=502, content={"error": str(e)})
+    else:
+        return JSONResponse(status_code=400, content={"error": "Must provide either audio or text"})
+
+    try:
+        converted_wav = await apply_rvc_conversion(
+            audio_bytes=audio_bytes,
+            voice_model=voice_model,
+            index_path=index_path,
+            pitch=pitch,
+            f0_method=f0_method,
+            index_rate=index_rate,
+            protect=protect,
+            clean_audio=clean_audio,
+            client=_client,
+        )
+    except PipelineError as e:
+        log.error("/convert-voice pipeline error at [%s]: %s", e.stage, e.detail)
+        return JSONResponse(
+            status_code=e.status_code,
+            content={"error": f"Pipeline failed at [{e.stage}]", "detail": e.detail},
+        )
+
+    return Response(
+        content=converted_wav,
+        media_type="audio/wav",
+        headers={"Content-Disposition": "attachment; filename=converted.wav"},
+    )
 
 
 @app.post("/llm/chat")
@@ -188,7 +246,7 @@ async def health_all():
 
 @app.get("/health/{service}")
 async def health_single(service: str):
-    """Check health of a specific service by name (stt, tts, rvc, llm)."""
+    """Check health of a specific service by name (stt, tts, vbv, llm)."""
     if service not in SERVICES:
         return JSONResponse(
             status_code=404,

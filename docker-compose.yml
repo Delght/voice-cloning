@@ -42,10 +42,26 @@ services:
     env_file: .env
     volumes:
       - ./models:/app/models:ro
-      - ./data:/app/data
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8003/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+
+  # ── VBV (:8005) ──────────────────────────────────────────────────────
+  vbv:
+    build:
+      context: .
+      dockerfile: services/vbv/Dockerfile
+    env_file: .env
+    volumes:
+      - ./models:/app/models:ro
+      - ./data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8005/health')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -78,6 +94,7 @@ services:
     environment:
       - STT_URL=http://stt:8001
       - TTS_URL=http://tts:8002
+      - VBV_URL=http://vbv:8005
       - RVC_URL=http://rvc:8003
       - LLM_URL=http://llm:8004
     ports:

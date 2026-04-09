@@ -14,9 +14,10 @@ from . import api_client
 
 TITLE = "Fiona Anne"
 
-ENGINE_VIENEU = "VieNeu-TTS"
-ENGINE_FISH = "fish-speech"
-ENGINE_CHOICES: tuple[str, ...] = (ENGINE_VIENEU, ENGINE_FISH)
+ENGINE_VIENEU = "VieNeu (vi/en)"
+ENGINE_VBV = "VibeVoice (en)"
+ENGINE_FISH = "Fish-Speech"
+ENGINE_CHOICES: tuple[str, ...] = (ENGINE_FISH, ENGINE_VIENEU, ENGINE_VBV)
 _DEFAULT_ENGINE = ENGINE_FISH
 
 _THEME_BODY_BG_DARK = "#0a1f24"
@@ -97,16 +98,9 @@ def _synthesize_voice_chat_reply(
     fish_ref_text: str,
 ) -> str:
     ref_path = _resolve_fish_ref_path(fish_ref_audio)
-    if not ref_path:
-        raise ValueError(
-            "No fish-speech reference: upload in the accordion, restore the bundled "
-            "default ref, or set VOICE_CHAT_FISH_REF_AUDIO."
-        )
-    ref_txt = (fish_ref_text or "").strip() or VOICE_CHAT_FISH_REF_TEXT
-    return api_client.tts_fish(
+    return api_client.tts_vbv(
         text=ai_text,
         ref_audio_path=ref_path,
-        ref_text=ref_txt,
     )
 
 
@@ -178,6 +172,18 @@ def on_tts(
         raise gr.Error("Enter some text to synthesize.")
 
     try:
+        if engine == ENGINE_FISH:
+            return api_client.tts_fish(
+                text=text,
+                ref_audio_path=ref_audio,
+                ref_text=ref_text,
+                temperature=temperature,
+                top_k=int(top_k),
+                top_p=top_p,
+                repetition_penalty=rep_penalty,
+                chunk_length=int(chunk_len),
+            )
+
         if engine == ENGINE_VIENEU:
             return api_client.tts_vieneu(
                 text=text,
@@ -188,17 +194,11 @@ def on_tts(
                 max_chars=int(max_chars),
             )
 
-        if ref_audio is None:
-            raise gr.Error(f"{ENGINE_FISH} requires a reference audio file.")
-        return api_client.tts_fish(
-            text=text,
-            ref_audio_path=ref_audio,
-            ref_text=ref_text,
-            temperature=temperature,
-            top_p=float(top_p),
-            repetition_penalty=float(rep_penalty),
-            chunk_length=int(chunk_len),
-        )
+        if engine == ENGINE_VBV:
+            return api_client.tts_vbv(
+                text=text,
+                ref_audio_path=ref_audio,
+            )
     except api_client.APIError as e:
         raise gr.Error(f"TTS error: {e.detail}") from e
 
@@ -220,44 +220,78 @@ def on_ref_audio_upload(audio_path: str | None):
 
 
 def on_engine_change(engine: str):
+    is_vbv = engine == ENGINE_VBV
     is_fish = engine == ENGINE_FISH
-    ref_label = (
-        "Reference audio (required)" if is_fish else "Reference audio (optional, for voice cloning)"
-    )
+    ref_label = "Reference audio (optional, for voice cloning)"
     return [
         gr.update(label=ref_label),
         gr.update(visible=True),
-        gr.update(value=0.7 if is_fish else 1.0),  # temperature default
-        gr.update(visible=not is_fish),  # top_k
-        gr.update(visible=not is_fish),  # max_chars
+        gr.update(value=0.7),  # temperature default
+        gr.update(visible=not is_vbv),  # top_k
+        gr.update(visible=not is_vbv),  # max_chars
         gr.update(visible=is_fish),  # top_p
         gr.update(visible=is_fish),  # repetition penalty
         gr.update(visible=is_fish),  # chunk length
     ]
 
 
-def on_convert(
+def on_convert_wrapper(
+    input_mode: str,
+    text: str,
     audio_path: str | None,
-    voice_model: str,
+    voice_model_path: str | None,
+    index_file_path: str | None,
     pitch: int,
     f0_method: str,
     index_rate: float,
     protect: float,
     clean_audio: bool,
 ):
-    if audio_path is None:
-        raise gr.Error("Upload an audio file first.")
-    if not voice_model.strip():
-        raise gr.Error("Enter a voice model name (e.g. 'target').")
+    if not voice_model_path:
+        raise gr.Error("Please upload a .pth voice model.")
+
+    resolved_audio = None
+    resolved_text = None
+    if input_mode == "Upload Audio":
+        if not audio_path:
+            raise gr.Error("Upload an audio file first.")
+        resolved_audio = audio_path
+    else:
+        if not text.strip():
+            raise gr.Error("Enter text to synthesize.")
+        resolved_text = text
+
+    import shutil
+    from pathlib import Path
+
+    models_dir = Path("models/rvc")
+    models_dir.mkdir(parents=True, exist_ok=True)
+
+    pth_path = Path(voice_model_path)
+    target_pth = models_dir / pth_path.name
+    if not target_pth.exists() or target_pth.stat().st_size != pth_path.stat().st_size:
+        shutil.copyfile(voice_model_path, target_pth)
+    model_name_to_send = target_pth.stem
+
+    index_to_send = ""
+    if index_file_path:
+        idx_path = Path(index_file_path)
+        target_idx = models_dir / idx_path.name
+        if not target_idx.exists() or target_idx.stat().st_size != idx_path.stat().st_size:
+            shutil.copyfile(index_file_path, target_idx)
+        index_to_send = f"models/rvc/{idx_path.name}"
+
     try:
         return api_client.convert_voice(
-            audio_path=audio_path,
-            voice_model=voice_model.strip(),
+            audio_path=resolved_audio,
+            voice_model=model_name_to_send,
+            index_path=index_to_send,
             pitch=int(pitch),
             f0_method=f0_method,
             index_rate=float(index_rate),
             protect=float(protect),
             clean_audio=bool(clean_audio),
+            text=resolved_text,
         )
     except api_client.APIError as e:
         raise gr.Error(f"RVC error: {e.detail}") from e
@@ -460,43 +494,78 @@ def _add_voice_cloning_tab() -> None:
 
 def _add_voice_conversion_tab() -> None:
     with gr.TabItem("Voice Conversion"):
-        with gr.Row():
-            with gr.Column():
-                rvc_audio_in = gr.Audio(sources=["upload"], type="filepath", label="Input audio")
-                rvc_model = gr.Textbox(
-                    label="Voice model name",
-                    placeholder="e.g. target (looks for models/rvc/target.pth)",
-                )
-                with gr.Accordion("Parameters", open=False):
-                    rvc_pitch = gr.Slider(-24, 24, value=0, step=1, label="Pitch (semitones)")
-                    rvc_f0 = gr.Dropdown(
-                        choices=["rmvpe", "crepe", "fcpe"],
-                        value="rmvpe",
-                        label="F0 method",
-                    )
-                    rvc_index = gr.Slider(0.0, 1.0, value=0.75, step=0.05, label="Index rate")
-                    rvc_protect = gr.Slider(0.0, 1.0, value=0.5, step=0.05, label="Protect")
-                    rvc_clean = gr.Checkbox(label="Clean audio (noise reduction)", value=False)
-                rvc_btn = gr.Button("Convert", variant="primary")
-            with gr.Column():
-                rvc_audio_out = gr.Audio(
+        with gr.Column():
+            input_mode = gr.Radio(
+                choices=["Upload Audio", "Type Text (via VibeVoice)"],
+                value="Upload Audio",
+                label="Input Mode",
+            )
+
+            with gr.Group():
+                convert_audio_in = gr.Audio(
+                    sources=["upload", "microphone"],
                     type="filepath",
-                    label="Converted audio",
-                    interactive=False,
+                    label="Source audio",
+                )
+                convert_text_in = gr.Textbox(
+                    label="Source text",
+                    placeholder="Type text for VibeVoice to speak...",
+                    lines=3,
+                    visible=False,
                 )
 
-        rvc_btn.click(
-            fn=on_convert,
+            with gr.Row():
+                convert_model = gr.File(
+                    label="Upload .pth model",
+                    file_types=[".pth"],
+                    type="filepath",
+                )
+                convert_index_file = gr.File(
+                    label="Upload .index file (optional)",
+                    file_types=[".index"],
+                    type="filepath",
+                )
+            with gr.Accordion("RVC Parameters", open=False):
+                convert_pitch = gr.Slider(-24, 24, value=0, step=1, label="Pitch shift (semitones)")
+                convert_f0 = gr.Dropdown(
+                    choices=["rmvpe", "crepe", "fcpe", "harvest"], value="rmvpe", label="F0 method"
+                )
+                convert_index = gr.Slider(0.0, 1.0, value=0.75, step=0.05, label="Index rate")
+                convert_protect = gr.Slider(
+                    0.0, 0.5, value=0.33, step=0.01, label="Protect consonants"
+                )
+                convert_clean = gr.Checkbox(value=False, label="Clean audio (noise reduction)")
+
+            convert_btn = gr.Button("Convert Voice", variant="primary", size="md")
+            convert_audio_out = gr.Audio(
+                type="filepath", label="Converted audio", interactive=False
+            )
+
+        def toggle_input(mode):
+            return [
+                gr.update(visible=mode == "Upload Audio"),
+                gr.update(visible=mode == "Type Text (via VibeVoice)"),
+            ]
+
+        input_mode.change(
+            fn=toggle_input, inputs=[input_mode], outputs=[convert_audio_in, convert_text_in]
+        )
+
+        convert_btn.click(
+            fn=on_convert_wrapper,
             inputs=[
-                rvc_audio_in,
-                rvc_model,
-                rvc_pitch,
-                rvc_f0,
-                rvc_index,
-                rvc_protect,
-                rvc_clean,
+                input_mode,
+                convert_text_in,
+                convert_audio_in,
+                convert_model,
+                convert_index_file,
+                convert_pitch,
+                convert_f0,
+                convert_index,
+                convert_protect,
+                convert_clean,
             ],
-            outputs=[rvc_audio_out],
+            outputs=[convert_audio_out],
         )
 
 
