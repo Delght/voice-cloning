@@ -1,3 +1,4 @@
+import asyncio
 import copy
 import io
 import logging
@@ -22,38 +23,42 @@ logging.basicConfig(
 )
 log = logging.getLogger(__name__)
 
-# Global variables for model
-model = None
-processor = None
+# Dynamic device detection — repo convention: cuda → mps → cpu; never hardcode
+device: str = (
+    "cuda" if torch.cuda.is_available() else "mps" if torch.backends.mps.is_available() else "cpu"
+)
+
+# Global model state
+model: VibeVoiceStreamingForConditionalGenerationInference | None = None
+processor: VibeVoiceStreamingProcessor | None = None
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     global model, processor
-    # Choose path depending on whether it runs in docker or locally
     model_path = (
         "/app/models/vibevoice" if os.path.exists("/app/models/vibevoice") else "models/vibevoice"
     )
-    log.info("Loading VibeVoice model from %s...", model_path)
+    log.info("Loading VibeVoice model from %s on device=%s...", model_path, device)
 
     try:
         processor = VibeVoiceStreamingProcessor.from_pretrained(model_path)
 
-        # Apple Silicon (MPS) configuration
-        load_dtype = torch.float32
-        attn_impl_primary = "sdpa"
+        # float16 on CUDA for speed; float32 on MPS/CPU (no float16 support)
+        load_dtype = torch.float16 if device == "cuda" else torch.float32
         model = VibeVoiceStreamingForConditionalGenerationInference.from_pretrained(
             model_path,
             torch_dtype=load_dtype,
-            attn_implementation=attn_impl_primary,
+            attn_implementation="sdpa",
             device_map=None,
         )
-        model.to("mps")
+        model.to(device)
         model.eval()
         model.set_ddpm_inference_steps(num_steps=5)
-        log.info("VibeVoice model loaded successfully on MPS!")
+        log.info("VibeVoice model loaded successfully on %s!", device)
     except Exception as e:
-        log.error("Failed to load user model: %s", e)
+        log.error("Failed to load VibeVoice model: %s", e)
+        # model/processor remain None; /health will report not-ready
 
     yield
 
@@ -84,31 +89,25 @@ async def runtime_error_handler(request, exc):
 async def generate_tts(text: str = Form(...), ref_audio: UploadFile = File(None)):
     """
     Generate speech from text using VibeVoice.
-    Optionally accepts a reference audio file for zero-shot cloning.
+
+    VibeVoice 0.5B uses precomputed .pt voice presets instead of on-the-fly WAV cloning.
+    The ref_audio parameter is accepted for API compatibility but is not applied to inference.
+    To change voice identity, swap the preset at models/vibevoice/voices/.
     """
+    if model is None or processor is None:
+        raise HTTPException(status_code=503, detail="VBV model is not loaded yet.")
+
     if not text.strip():
         raise HTTPException(status_code=400, detail="Text cannot be empty.")
 
     log.info(
-        "Received request for TTS: Text='%s...', Ref Audio=%s",
+        "TTS request: text='%s...', ref_audio=%s",
         text[:50],
-        "Yes" if ref_audio else "No",
+        "provided (not used — preset-based)" if ref_audio else "none",
     )
-
-    if ref_audio:
-        try:
-            content = await ref_audio.read()
-            # Reference audio content might be used in future when dynamic presets are supported
-            _ = content
-        except Exception as e:
-            log.error("Error reading ref audio: %s", e)
-            raise HTTPException(status_code=400, detail="Failed to read reference audio")
 
     t0 = time.time()
 
-    # VibeVoice inference
-    # Note: VibeVoice 0.5B streaming relies on precomputed .pt voice presets
-    # instead of on-the-fly zero-shot cloning from wav files. We use a default preset.
     voice_preset_path = (
         "/app/models/vibevoice/voices/en-Carter_man.pt"
         if os.path.exists("/app/models/vibevoice")
@@ -118,10 +117,10 @@ async def generate_tts(text: str = Form(...), ref_audio: UploadFile = File(None)
     all_prefilled_outputs = None
     if os.path.exists(voice_preset_path):
         all_prefilled_outputs = torch.load(
-            voice_preset_path, map_location="mps", weights_only=False
+            voice_preset_path, map_location=device, weights_only=False
         )
     else:
-        log.warning("Voice preset %s not found. Output may be degraded or fail.", voice_preset_path)
+        log.warning("Voice preset %s not found. Output may be degraded.", voice_preset_path)
 
     inputs = processor.process_input_with_cached_prompt(
         text=text,
@@ -132,43 +131,54 @@ async def generate_tts(text: str = Form(...), ref_audio: UploadFile = File(None)
     )
     for k, v in inputs.items():
         if torch.is_tensor(v):
-            inputs[k] = v.to("mps")
+            inputs[k] = v.to(device)
 
-    outputs = model.generate(
-        **inputs,
-        max_new_tokens=None,
-        cfg_scale=1.5,
-        tokenizer=processor.tokenizer,
-        generation_config={"do_sample": False},
-        verbose=False,
-        all_prefilled_outputs=copy.deepcopy(all_prefilled_outputs)
-        if all_prefilled_outputs is not None
-        else None,
+    # Snapshot prefilled outputs before handing off to thread (avoids mutation race)
+    prefilled_copy = (
+        copy.deepcopy(all_prefilled_outputs) if all_prefilled_outputs is not None else None
     )
 
+    # Offload blocking CPU/GPU inference to a thread — keeps event loop free
+    def _do_generate():
+        return model.generate(
+            **inputs,
+            max_new_tokens=None,
+            cfg_scale=1.5,
+            tokenizer=processor.tokenizer,
+            generation_config={"do_sample": False},
+            verbose=False,
+            all_prefilled_outputs=prefilled_copy,
+        )
+
+    outputs = await asyncio.to_thread(_do_generate)
+
     speech_output = outputs.speech_outputs[0]
-    if torch.is_tensor(speech_output):
-        audio_output = speech_output.cpu().numpy()
-    else:
-        audio_output = speech_output
+    audio_output = speech_output.cpu().numpy() if torch.is_tensor(speech_output) else speech_output
 
     sample_rate = 24000
-    # Flatten if it has extra dimensions
     if len(audio_output.shape) > 1 and audio_output.shape[0] == 1:
         audio_output = audio_output.squeeze(0)
 
-    # Encode as WAV
     buffer = io.BytesIO()
     sf.write(buffer, audio_output, sample_rate, format="WAV")
     buffer.seek(0)
 
-    t1 = time.time()
-    audio_duration = len(audio_output) / sample_rate
-    log.info("TTS generated successfully in %.3fs. Audio duration: %.2fs", t1 - t0, audio_duration)
+    elapsed = time.time() - t0
+    log.info("TTS done in %.3fs. Audio: %.2fs", elapsed, len(audio_output) / sample_rate)
 
     return Response(content=buffer.read(), media_type="audio/wav")
 
 
 @app.get("/health")
 async def health_check():
-    return JSONResponse(content={"status": "healthy", "service": "vbv"}, status_code=200)
+    """Returns healthy only when model+processor are fully loaded."""
+    ready = model is not None and processor is not None
+    return JSONResponse(
+        content={
+            "status": "healthy" if ready else "loading",
+            "service": "vbv",
+            "device": device,
+            "model_loaded": ready,
+        },
+        status_code=200,
+    )

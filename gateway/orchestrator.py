@@ -74,7 +74,7 @@ async def run_chat_pipeline(audio_bytes: bytes, client: httpx.AsyncClient) -> by
             )
         except httpx.ConnectError:
             raise PipelineError("TTS", "Cannot connect to VBV TTS service (:8005).")
-        except httpx.ReadTimeout:
+        except httpx.TimeoutException:
             raise PipelineError("TTS", "VBV TTS service timed out.")
 
     if tts_resp.status_code != 200:

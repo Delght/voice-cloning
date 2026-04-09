@@ -7,7 +7,7 @@ from huggingface_hub import snapshot_download
 def download_model(repo_id: str, output_dir: str):
     print(f"Downloading model {repo_id} to {output_dir}...")
     os.makedirs(output_dir, exist_ok=True)
-    snapshot_download(repo_id=repo_id, local_dir=output_dir, local_dir_use_symlinks=False)
+    snapshot_download(repo_id=repo_id, local_dir=output_dir)
     print("Download completed successfully!")
 
 

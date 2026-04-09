@@ -142,7 +142,10 @@ curl -X POST http://localhost:8000/convert-voice \
 make convert_audio
 
 # Test infer directly on modules
-python scripts/tts_infer.py --text "Hello"
+python scripts/tts_infer.py \
+    --text "Hello, this is a voice cloning test." \
+    --ref data/chunks/speech_chunk_0001.wav \
+    --ref-text "Transcript of your reference audio clip."
 python scripts/vieneu_infer.py --text "Xin chào!"
 ```
 

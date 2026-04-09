@@ -106,6 +106,10 @@ services:
         condition: service_healthy
       llm:
         condition: service_healthy
+      vbv:
+        condition: service_healthy
+      rvc:
+        condition: service_healthy
     restart: unless-stopped
 
   # ── Gradio UI (:7860) ──────────────────────────────────────────────────────

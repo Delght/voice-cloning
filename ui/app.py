@@ -199,6 +199,8 @@ def on_tts(
                 text=text,
                 ref_audio_path=ref_audio,
             )
+
+        raise gr.Error(f"Unknown TTS engine: {engine!r}")
     except api_client.APIError as e:
         raise gr.Error(f"TTS error: {e.detail}") from e
 

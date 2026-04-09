@@ -176,8 +176,24 @@ async def convert_voice_endpoint(
                     content={"error": "VBV TTS failed", "detail": tts_resp.text},
                 )
             audio_bytes = tts_resp.content
+        except httpx.ConnectError:
+            return JSONResponse(
+                status_code=502,
+                content={
+                    "error": "VBV service unavailable",
+                    "detail": "Connection refused to VBV (:8005)",
+                },
+            )
+        except httpx.TimeoutException:
+            return JSONResponse(
+                status_code=504,
+                content={"error": "VBV service timeout", "detail": "VBV did not respond in time"},
+            )
         except Exception as e:
-            return JSONResponse(status_code=502, content={"error": str(e)})
+            log.error("/convert-voice VBV error: %r", e)
+            return JSONResponse(
+                status_code=502, content={"error": "VBV TTS failed", "detail": repr(e)}
+            )
     else:
         return JSONResponse(status_code=400, content={"error": "Must provide either audio or text"})
 
@@ -246,7 +262,7 @@ async def health_all():
 
 @app.get("/health/{service}")
 async def health_single(service: str):
-    """Check health of a specific service by name (stt, tts, vbv, llm)."""
+    """Check health of a specific service by name (stt, tts, rvc, vbv, llm)."""
     if service not in SERVICES:
         return JSONResponse(
             status_code=404,

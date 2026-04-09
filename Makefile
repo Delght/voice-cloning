@@ -54,7 +54,7 @@ help:
 	@echo "  make install-hooks - install git pre-commit hook (runs check before every commit)"
 	@echo ""
 	@echo "Run services:"
-	@echo "  make run_all          - start STT + TTS(fish-speech) + LLM + Gateway"
+	@echo "  make run_all          - start STT + TTS(fish) + VBV + RVC + LLM + Gateway"
 	@echo "  make stop_all         - kill listeners on project ports (SIGKILL; OK if TTS is stuck)"
 	@echo "  make run_gateway"
 	@echo "  make run_stt"
