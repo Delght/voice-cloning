@@ -141,9 +141,10 @@ def tts_vieneu(
 def tts_fish(
     *,
     text: str,
-    ref_audio_path: str,
+    ref_audio_path: str | None = None,
     ref_text: str = "",
     temperature: float = 0.7,
+    top_k: int = 50,
     top_p: float = 0.7,
     repetition_penalty: float = 1.2,
     chunk_length: int = 200,
@@ -152,18 +153,48 @@ def tts_fish(
         "text": text,
         "ref_text": ref_text,
         "temperature": str(temperature),
+        "top_k": str(top_k),
         "top_p": str(top_p),
         "repetition_penalty": str(repetition_penalty),
         "chunk_length": str(chunk_length),
     }
-    wav_bytes, wav_name = _to_wav_bytes(ref_audio_path)
     try:
-        resp = _client.post(
-            f"{GATEWAY_URL}/tts/fish-speech",
-            data=data,
-            files={"ref_audio": (wav_name, wav_bytes, "audio/wav")},
-            timeout=TTS_TIMEOUT,
-        )
+        if ref_audio_path:
+            wav_bytes, wav_name = _to_wav_bytes(ref_audio_path)
+            resp = _client.post(
+                f"{GATEWAY_URL}/tts/fish-speech",
+                data=data,
+                files={"ref_audio": (wav_name, wav_bytes, "audio/wav")},
+                timeout=TTS_TIMEOUT,
+            )
+        else:
+            resp = _client.post(f"{GATEWAY_URL}/tts/fish-speech", data=data, timeout=TTS_TIMEOUT)
+    except httpx.ReadTimeout as e:
+        raise _tts_timeout_exc() from e
+
+    _raise_on_error(resp)
+    return _save_wav(resp.content)
+
+
+def tts_vbv(
+    *,
+    text: str,
+    ref_audio_path: str | None = None,
+) -> str:
+    data = {
+        "text": text,
+    }
+    try:
+        if ref_audio_path:
+            wav_bytes, wav_name = _to_wav_bytes(ref_audio_path)
+            resp = _client.post(
+                f"{GATEWAY_URL}/tts/vbv",
+                data=data,
+                files={"ref_audio": (wav_name, wav_bytes, "audio/wav")},
+                timeout=TTS_TIMEOUT,
+            )
+        else:
+            resp = _client.post(f"{GATEWAY_URL}/tts/vbv", data=data, timeout=TTS_TIMEOUT)
     except httpx.ReadTimeout as e:
         raise _tts_timeout_exc() from e
     _raise_on_error(resp)
@@ -171,28 +202,42 @@ def tts_fish(
 
 
 def convert_voice(
-    *,
-    audio_path: str,
+    audio_path: str | None,
     voice_model: str,
+    index_path: str = "",
     pitch: int = 0,
     f0_method: str = "rmvpe",
     index_rate: float = 0.75,
-    protect: float = 0.5,
+    protect: float = 0.33,
     clean_audio: bool = False,
+    text: str | None = None,
 ) -> str:
     data = {
         "voice_model": voice_model,
+        "index_path": index_path,
         "pitch": str(pitch),
         "f0_method": f0_method,
         "index_rate": str(index_rate),
         "protect": str(protect),
         "clean_audio": str(clean_audio).lower(),
     }
-    wav_bytes, wav_name = _to_wav_bytes(audio_path)
-    resp = _client.post(
-        f"{GATEWAY_URL}/convert-voice",
-        data=data,
-        files={"audio": (wav_name, wav_bytes, "audio/wav")},
-    )
+    if text:
+        data["text"] = text
+
+    files = {}
+    if audio_path:
+        wav_bytes, wav_name = _to_wav_bytes(audio_path)
+        files = {"audio": (wav_name, wav_bytes, "audio/wav")}
+
+    try:
+        resp = _client.post(
+            f"{GATEWAY_URL}/convert-voice",
+            data=data,
+            files=files if files else None,
+            timeout=TTS_TIMEOUT,
+        )
+    except httpx.ReadTimeout as e:
+        raise _tts_timeout_exc() from e
+
     _raise_on_error(resp)
     return _save_wav(resp.content)

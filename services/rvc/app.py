@@ -67,7 +67,7 @@ def convert_voice(
     ),
     index_path: str = Form("", description="Path to .index file (optional, improves quality)"),
     pitch: int = Form(0, description="Pitch shift in semitones (+12 = 1 octave up)"),
-    f0_method: str = Form("rmvpe", description="F0 extraction: rmvpe, crepe, fcpe, swift"),
+    f0_method: str = Form("rmvpe", description="F0 extraction: rmvpe, crepe, fcpe, harvest"),
     index_rate: float = Form(0.75, description="Index matching rate (0.0-1.0)"),
     protect: float = Form(0.5, description="Consonant protection (0.0-1.0)"),
     clean_audio: bool = Form(False, description="Apply noise reduction before conversion"),

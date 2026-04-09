@@ -1,8 +1,6 @@
 # Fiona Anne
 
-Self-hosted voice cloning and conversational AI. Zero external APIs.
-
-Zero shot voice cloning: Clone any voice from a 10 to 30s audio sample. No training, no fine-tuning required.
+Self-hosted voice conversational AI. Zero external APIs required.
 
 ## Table of contents
 
@@ -42,7 +40,7 @@ Your own clip: paths and transcript in `.env` (see [`.env.example`](.env.example
 | Layer | Technology |
 | --- | --- |
 | STT | [SYSTRAN/faster-whisper](https://github.com/SYSTRAN/faster-whisper) |
-| TTS | [fishaudio/fish-speech](https://github.com/fishaudio/fish-speech) + [pnnbao97/VieNeu-TTS](https://github.com/pnnbao97/VieNeu-TTS) |
+| TTS | [fishaudio/fish-speech](https://github.com/fishaudio/fish-speech) + [pnnbao97/VieNeu-TTS](https://github.com/pnnbao97/VieNeu-TTS) (VN) + [microsoft/VibeVoice](https://github.com/microsoft/VibeVoice) (EN) |
 | Voice Conversion | [IAHispano/Applio](https://github.com/IAHispano/Applio) (RVC) |
 | LLM | [Gemma 4](https://ai.google.dev/gemma) via [Ollama](https://ollama.com) + [Anything-LLM](https://github.com/Mintplex-Labs/anything-llm) |
 | Backend | [FastAPI](https://github.com/fastapi/fastapi) + [Pydantic](https://github.com/pydantic/pydantic) |
@@ -59,7 +57,8 @@ flowchart TB
     subgraph MS[Backend services]
         direction LR
         STT[STT :8001]
-        TTS[TTS :8002]
+        TTS[Fish/VieNeu :8002]
+        VBV[VBV :8005]
         RVC[RVC :8003]
         LLM[LLM :8004]
     end
@@ -68,7 +67,9 @@ flowchart TB
     G -->|HTTP| GW
     GW --> STT
     GW --> TTS
+    GW --> VBV
     GW --> RVC
+    VBV -.->|Audio bytes| RVC
     GW --> LLM
 ```
 
@@ -78,9 +79,9 @@ flowchart TB
 | --- | --- | --- |
 | LLM only | `/llm/chat` | JSON `{"message": "..."}` -> assistant text (proxied to `:8004`) |
 | Conversation (one shot) | `/chat` | `Mic -> STT -> LLM -> TTS -> WAV`. E.g. `make chat_sample`, `api_client.chat()` |
-| Voice Chat (Gradio) | `/transcribe` + `/llm/chat` + `/tts/*` | Same stages as `/chat`, split for progress UI; fish ref: bundled default, upload, or env (see `.env.example`) |
-| Voice cloning | `/tts/vieneu`, `/tts/fish-speech` | `Text + ref audio + ref_text -> TTS -> WAV` |
-| Voice conversion | `/convert-voice` | `WAV + RVC .pth -> RVC -> converted WAV` |
+| Voice Chat (Gradio) | `/transcribe` + `/llm/chat` + `/tts/*` | Same stages as `/chat`, split for progress UI; auto-routes to VieNeu or VBV based on language |
+| Voice cloning | `/tts/fish-speech`, `/tts/vieneu` | `Text + ref audio + ref_text -> TTS -> WAV` (Zero-shot) |
+| Voice conversion | `/convert-voice` | `Audio -> RVC -> WAV` OR `Text -> VBV -> RVC -> WAV` (Speed/Quality hybrid) |
 | Transcribe | `/transcribe` | `Audio -> STT -> text` |
 
 ## Requirements
@@ -93,25 +94,23 @@ flowchart TB
 ```bash
 conda activate voice
 make help        # list all commands
-make run_all     # start STT + TTS + LLM + Gateway
+make run_all     # start Gateway + STT + TTS + VBV + RVC + LLM
 make run_ui      # Gradio at :7860
 make health      # check all services
 ```
 
-Default TTS is **fish-speech** (`make run_tts` uses conda env `voice_fish`). VieNeu stays available:
+Run all system components simultaneously (make sure you installed all weights):
 
 ```bash
-make run_tts_vieneu   # VieNeu only (conda env voice)
+make run_all
 ```
-
-`POST /chat` resolves fish reference like Voice Chat: bundled default unless `CHAT_FISH_REF_AUDIO` / `VOICE_CHAT_FISH_REF_AUDIO` is set. Set the matching `*_REF_TEXT` in `.env` for best quality (see `.env.example`).
 
 ### API
 
 ```bash
 curl http://localhost:8000/health
 
-# Needs fish TTS + default ref (repo or CHAT_* / VOICE_* in .env) + matching ref_text
+# Run chat pipeline
 curl -X POST http://localhost:8000/chat \
     -F "audio=@data/chunks/speech_chunk_0001.wav" -o response.wav
 
@@ -122,7 +121,16 @@ curl -X POST http://localhost:8000/tts/vieneu \
     -F "text=Xin chào!" \
     -F "ref_audio=@data/raw/reference.wav" \
     -F "ref_text=Exact transcript of the reference audio" \
-    -o output.wav
+    -o output_vi.wav
+
+curl -X POST http://localhost:8000/tts/vbv \
+    -F "text=Hello from VBV!" \
+    -o output_en.wav
+
+curl -X POST http://localhost:8000/convert-voice \
+    -F "audio=@output_en.wav" \
+    -F "voice_model=target" \
+    -o output_converted.wav
 ```
 
 > VieNeu: `ref_text` must match the reference audio exactly. Omitting it degrades cloning quality significantly.
@@ -131,17 +139,15 @@ curl -X POST http://localhost:8000/tts/vieneu \
 
 ```bash
 # Convert mp3/m4a -> wav (batch, before using as reference audio)
-python scripts/convert_audio.py --input audio/input --output audio/output
-# or via make:
 make convert_audio
 
-python scripts/chunk_audio.py --input data/raw/YOUR_FILE.mp3
-python scripts/tts_infer.py --text "Hello" --ref data/chunks/speech_chunk_0001.wav --ref-text "..."
+# Test infer directly on modules
+python scripts/tts_infer.py \
+    --text "Hello, this is a voice cloning test." \
+    --ref data/chunks/speech_chunk_0001.wav \
+    --ref-text "Transcript of your reference audio clip."
 python scripts/vieneu_infer.py --text "Xin chào!"
-python scripts/rvc_infer.py --input data/output.wav --model models/rvc/target.pth
 ```
-
-> RVC requires a trained `.pth` model. Create `models/rvc/` and add your model before running.
 
 ### Dev
 

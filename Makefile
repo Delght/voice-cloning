@@ -5,7 +5,7 @@
 # Config
 # ------------------------------------------------------------
 CONDA_ENV      ?= voice
-FISH_CONDA_ENV ?= voice_fish
+FISH_CONDA_ENV ?= $(CONDA_ENV)
 
 PY           := conda run --no-capture-output -n $(CONDA_ENV) python
 RUFF         := conda run --no-capture-output -n $(CONDA_ENV) ruff
@@ -20,6 +20,9 @@ STT_PORT ?= 8001
 
 TTS_HOST ?= 127.0.0.1
 TTS_PORT ?= 8002
+
+VBV_HOST ?= 127.0.0.1
+VBV_PORT ?= 8005
 
 RVC_HOST ?= 127.0.0.1
 RVC_PORT ?= 8003
@@ -51,13 +54,13 @@ help:
 	@echo "  make install-hooks - install git pre-commit hook (runs check before every commit)"
 	@echo ""
 	@echo "Run services:"
-	@echo "  make run_all          - start STT + TTS(fish-speech) + LLM + Gateway"
+	@echo "  make run_all          - start STT + TTS(fish) + VBV + RVC + LLM + Gateway"
 	@echo "  make stop_all         - kill listeners on project ports (SIGKILL; OK if TTS is stuck)"
 	@echo "  make run_gateway"
 	@echo "  make run_stt"
 	@echo "  make run_tts          - TTS fish-speech (conda voice_fish; TTS_ENGINES=fish)"
 	@echo "  make run_tts_vieneu   - TTS VieNeu only (conda voice; TTS_ENGINES=vieneu)"
-	@echo "  make run_rvc"
+	@echo "  make run_vbv"
 	@echo "  make run_llm          - LLM connector -> Anything-LLM :3001"
 	@echo "  make run_ui           - Gradio UI (connects to Gateway)"
 	@echo ""
@@ -115,6 +118,9 @@ run_tts:
 run_tts_vieneu:
 	TTS_ENGINES=vieneu $(UVICORN) services.tts.app:app --host $(TTS_HOST) --port $(TTS_PORT)
 
+run_vbv:
+	$(UVICORN) services.vbv.main:app --host $(VBV_HOST) --port $(VBV_PORT)
+
 run_rvc:
 	$(UVICORN) services.rvc.app:app --host $(RVC_HOST) --port $(RVC_PORT)
 
@@ -127,15 +133,16 @@ run_ui:
 run_all:
 	@$(UVICORN) services.stt.app:app --host $(STT_HOST) --port $(STT_PORT) &
 	@TTS_ENGINES=fish $(UVICORN_FISH) services.tts.app:app --host $(TTS_HOST) --port $(TTS_PORT) &
+	@$(UVICORN) services.vbv.main:app --host $(VBV_HOST) --port $(VBV_PORT) &
 	@$(UVICORN) services.rvc.app:app --host $(RVC_HOST) --port $(RVC_PORT) &
 	@$(UVICORN) services.llm.app:app --host $(LLM_HOST) --port $(LLM_PORT) &
 	@$(UVICORN) gateway.app:app --host $(GATEWAY_HOST) --port $(GATEWAY_PORT)
 
 # LISTEN sockets only; SIGKILL so stuck torch inference cannot ignore SIGTERM.
 stop_all:
-	@echo "stop_all: SIGKILL listeners on :$(STT_PORT) :$(TTS_PORT) :$(RVC_PORT) :$(LLM_PORT) :$(GATEWAY_PORT) :$(UI_PORT)"
+	@echo "stop_all: SIGKILL listeners on :$(STT_PORT) :$(TTS_PORT) :$(VBV_PORT) :$(RVC_PORT) :$(LLM_PORT) :$(GATEWAY_PORT) :$(UI_PORT)"
 	@for round in 1 2; do \
-		for port in $(STT_PORT) $(TTS_PORT) $(RVC_PORT) $(LLM_PORT) $(GATEWAY_PORT) $(UI_PORT); do \
+		for port in $(STT_PORT) $(TTS_PORT) $(VBV_PORT) $(RVC_PORT) $(LLM_PORT) $(GATEWAY_PORT) $(UI_PORT); do \
 			pids=$$(lsof -nP -iTCP:$$port -sTCP:LISTEN -t 2>/dev/null); \
 			if [ -n "$$pids" ]; then \
 				kill -9 $$pids 2>/dev/null || true; \

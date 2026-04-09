@@ -1,31 +1,12 @@
-"""POST /chat: STT, LLM, fish-speech TTS (ref audio from env or bundled WAV)."""
+"""Pipeline orchestration logic for /chat and /convert-voice endpoints."""
 
 from __future__ import annotations
 
-import os
-import subprocess
-from pathlib import Path
+import re
 
 import httpx
 
-from common.fish_ref import default_fish_ref_path
-from common.reference_audio import load_reference_as_wav
-
-from .config import LLM_URL, STT_URL, TTS_URL
-
-
-def _resolve_chat_fish_ref_path() -> Path | None:
-    env = (
-        os.environ.get("CHAT_FISH_REF_AUDIO") or os.environ.get("VOICE_CHAT_FISH_REF_AUDIO") or ""
-    ).strip()
-    if env:
-        p = Path(env)
-        if p.is_file():
-            return p
-    default_ref = default_fish_ref_path()
-    if default_ref.is_file():
-        return default_ref
-    return None
+from .config import LLM_URL, RVC_URL, STT_URL, TTS_URL, VBV_URL
 
 
 class PipelineError(Exception):
@@ -68,34 +49,33 @@ async def run_chat_pipeline(audio_bytes: bytes, client: httpx.AsyncClient) -> by
     if not response_text:
         raise PipelineError("LLM", "Empty response.", 502)
 
-    ref_path = _resolve_chat_fish_ref_path()
-    if ref_path is None:
-        raise PipelineError(
-            "TTS",
-            "Missing fish-speech reference (CHAT_FISH_REF_AUDIO, VOICE_CHAT_FISH_REF_AUDIO, "
-            "or audio/reference/phuong_anh.wav).",
-            503,
+    is_vietnamese = bool(
+        re.search(
+            r"[àáảãạăằắẳẵặâầấẩẫậèéẻẽẹêềếểễệìíỉĩịòóỏõọôồốổỗộơờớởỡợùúủũụưừứửữựỳýỷỹỵđ]",
+            response_text.lower(),
         )
-    ref_text = (
-        os.environ.get("CHAT_FISH_REF_TEXT") or os.environ.get("VOICE_CHAT_FISH_REF_TEXT") or ""
-    ).strip()
-    try:
-        ref_bytes, ref_filename = load_reference_as_wav(ref_path)
-    except FileNotFoundError as e:
-        raise PipelineError("TTS", f"Reference audio missing: {e}", 503) from e
-    except subprocess.CalledProcessError as e:
-        raise PipelineError("TTS", f"ffmpeg could not convert reference audio: {e}", 503) from e
+    )
 
-    try:
-        tts_resp = await client.post(
-            f"{TTS_URL}/tts/fish-speech",
-            files={"ref_audio": (ref_filename, ref_bytes, "audio/wav")},
-            data={"text": response_text, "ref_text": ref_text},
-        )
-    except httpx.ConnectError:
-        raise PipelineError("TTS", "Cannot connect to TTS service (:8002).")
-    except httpx.TimeoutException:
-        raise PipelineError("TTS", "TTS service timed out.")
+    if is_vietnamese:
+        try:
+            tts_resp = await client.post(
+                f"{TTS_URL}/tts/vieneu",
+                data={"text": response_text},
+            )
+        except httpx.ConnectError:
+            raise PipelineError("TTS", "Cannot connect to VieNeu TTS service (:8002).")
+        except httpx.TimeoutException:
+            raise PipelineError("TTS", "VieNeu TTS service timed out.")
+    else:
+        try:
+            tts_resp = await client.post(
+                f"{VBV_URL}/tts/vbv",
+                data={"text": response_text},
+            )
+        except httpx.ConnectError:
+            raise PipelineError("TTS", "Cannot connect to VBV TTS service (:8005).")
+        except httpx.TimeoutException:
+            raise PipelineError("TTS", "VBV TTS service timed out.")
 
     if tts_resp.status_code != 200:
         raise PipelineError("TTS", tts_resp.text[:300], tts_resp.status_code)
@@ -105,3 +85,44 @@ async def run_chat_pipeline(audio_bytes: bytes, client: httpx.AsyncClient) -> by
         raise PipelineError("TTS", "Empty audio response.", 502)
 
     return audio_out
+
+
+async def apply_rvc_conversion(
+    audio_bytes: bytes,
+    voice_model: str,
+    index_path: str,
+    pitch: int,
+    f0_method: str,
+    index_rate: float,
+    protect: float,
+    clean_audio: bool,
+    client: httpx.AsyncClient,
+) -> bytes:
+    try:
+        rvc_resp = await client.post(
+            f"{RVC_URL}/convert-voice",
+            files={"audio": ("audio.wav", audio_bytes, "audio/wav")},
+            data={
+                "voice_model": voice_model,
+                "index_path": index_path,
+                "pitch": str(pitch),
+                "f0_method": f0_method,
+                "index_rate": str(index_rate),
+                "protect": str(protect),
+                "clean_audio": str(clean_audio).lower(),
+            },
+            timeout=300.0,
+        )
+    except httpx.ConnectError:
+        raise PipelineError("RVC", "Cannot connect to RVC service (:8003).")
+    except httpx.TimeoutException:
+        raise PipelineError("RVC", "RVC service timed out.")
+
+    if rvc_resp.status_code != 200:
+        raise PipelineError("RVC", rvc_resp.text[:300], rvc_resp.status_code)
+
+    converted_out = rvc_resp.content
+    if not converted_out:
+        raise PipelineError("RVC", "Empty audio response from RVC.", 502)
+
+    return converted_out
